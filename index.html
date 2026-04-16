@@ -2,17 +2,66 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>歩数計</title>
+<title>世界冒険歩数計</title>
+
+<style>
+body {
+    text-align: center;
+    font-family: Arial, sans-serif;
+    background: linear-gradient(to right, #4facfe, #00f2fe);
+    color: white;
+}
+
+button {
+    padding: 10px 20px;
+    margin: 10px;
+    font-size: 16px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+#startBtn {
+    background-color: green;
+    color: white;
+}
+
+#stopBtn {
+    background-color: red;
+    color: white;
+}
+
+#progressBar {
+    width: 80%;
+    height: 20px;
+    background: white;
+    margin: 20px auto;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+#progress {
+    height: 100%;
+    width: 0%;
+    background: yellow;
+}
+</style>
 </head>
 
 <body>
 
-<h1>歩数計</h1>
+<h1>🌍 世界冒険歩数計</h1>
 
-<p>歩数: <span id="step">0</span></p>
+<h2>歩数: <span id="step">0</span></h2>
 
-<button onclick="start()">開始</button>
-<button onclick="stop()">停止</button>
+<h2 id="location">現在地：福井</h2>
+
+<div id="progressBar">
+    <div id="progress"></div>
+</div>
+
+<button id="startBtn" onclick="start()">開始</button>
+<button id="stopBtn" onclick="stop()">停止</button>
 
 <script>
 let steps = 0;
@@ -23,13 +72,39 @@ function start() {
         intervalId = setInterval(() => {
             steps++;
             document.getElementById("step").textContent = steps;
-        }, 1000);
+            updateLocation();
+            updateProgress();
+        }, 100);
     }
 }
 
 function stop() {
     clearInterval(intervalId);
     intervalId = null;
+}
+
+function updateLocation() {
+    let location = "福井";
+
+    if (steps >= 20000) {
+        location = "🌍 世界一周達成！🎉";
+    } else if (steps >= 10000) {
+        location = "🇺🇸 アメリカ";
+    } else if (steps >= 6000) {
+        location = "🇰🇷 韓国";
+    } else if (steps >= 3000) {
+        location = "大阪";
+    } else if (steps >= 1000) {
+        location = "東京";
+    }
+
+    document.getElementById("location").textContent = "現在地：" + location;
+}
+
+function updateProgress() {
+    let percent = (steps / 20000) * 100;
+    if (percent > 100) percent = 100;
+    document.getElementById("progress").style.width = percent + "%";
 }
 </script>
 
