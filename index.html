@@ -1,87 +1,208 @@
-import React, { useMemo, useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts";
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>AI歩き方診断（週別グラフ版）</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: #f5f5f5;
+      margin: 0;
+      padding: 20px;
+    }
 
-export default function WeeklyStepsGraph() {
-  const [stepsData, setStepsData] = useState({});
+    button {
+      font-size: 22px;
+      padding: 18px 40px;
+      margin: 10px;
+      border-radius: 14px;
+      border: none;
+      cursor: pointer;
+    }
 
-  // 今週（月曜〜日曜）を取得
-  const weekDates = useMemo(() => {
-    const today = new Date();
-    const day = today.getDay();
-    const diffToMonday = day === 0 ? -6 : 1 - day; // 日曜なら-6
+    #startBtn { background: #4CAF50; color: white; }
+    #stopBtn { background: #f44336; color: white; }
 
-    const monday = new Date(today);
-    monday.setDate(today.getDate() + diffToMonday);
+    #result, #analysis {
+      font-size: 20px;
+      margin-top: 15px;
+    }
 
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
-      return d;
+    .progress-container {
+      width: 80%;
+      height: 30px;
+      background: #ddd;
+      border-radius: 20px;
+      margin: 20px auto;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: #4CAF50;
+      text-align: center;
+      line-height: 30px;
+      color: white;
+      font-weight: bold;
+      transition: width 0.3s;
+    }
+
+    canvas {
+      margin-top: 30px;
+      background: white;
+      border-radius: 12px;
+      padding: 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>AI歩き方診断（週別表示）</h1>
+
+  <button id="startBtn">計測開始</button>
+  <button id="stopBtn">計測停止</button>
+
+  <div id="result">今日の歩数：0歩</div>
+  <div id="analysis"></div>
+
+  <div class="progress-container">
+    <div class="progress-bar" id="progressBar">0%</div>
+  </div>
+
+  <canvas id="stepChart" width="400" height="200"></canvas>
+
+  <script>
+    const DAILY_GOAL = 9000;
+
+    let steps = 0;
+    let walking = false;
+    let lastStepTime = 0;
+    let startTime = 0;
+    let magnitudes = [];
+
+    const STEP_THRESHOLD = 12;
+    const STEP_INTERVAL = 300;
+
+    function getTodayKey() {
+      const today = new Date();
+      return today.getFullYear() + "-" +
+             String(today.getMonth()+1).padStart(2,'0') + "-" +
+             String(today.getDate()).padStart(2,'0');
+    }
+
+    function getWeekKey(dateStr) {
+      const date = new Date(dateStr);
+      const firstDay = new Date(date.getFullYear(), 0, 1);
+      const pastDays = (date - firstDay) / 86400000;
+      const week = Math.ceil((pastDays + firstDay.getDay() + 1) / 7);
+      return `${date.getFullYear()}-W${week}`;
+    }
+
+    let dailyData = JSON.parse(localStorage.getItem("dailySteps")) || {};
+    const todayKey = getTodayKey();
+    if (!dailyData[todayKey]) dailyData[todayKey] = 0;
+
+    const resultDiv = document.getElementById("result");
+    const analysisDiv = document.getElementById("analysis");
+    const progressBar = document.getElementById("progressBar");
+
+    function updateUI() {
+      const todaySteps = dailyData[todayKey];
+      resultDiv.innerText = `今日の歩数：${todaySteps}歩`;
+
+      let percent = Math.min((todaySteps / DAILY_GOAL) * 100, 100);
+      progressBar.style.width = percent + "%";
+      progressBar.innerText = Math.floor(percent) + "%";
+      progressBar.style.background = percent >= 100 ? "#2196F3" : "#4CAF50";
+    }
+
+    updateUI();
+
+    function getWeeklyData() {
+      let weekly = {};
+      for (let date in dailyData) {
+        let weekKey = getWeekKey(date);
+        if (!weekly[weekKey]) weekly[weekKey] = 0;
+        weekly[weekKey] += dailyData[date];
+      }
+      return weekly;
+    }
+
+    const ctx = document.getElementById('stepChart').getContext('2d');
+    const chart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: Object.keys(getWeeklyData()),
+        datasets: [{
+          label: '週別歩数',
+          data: Object.values(getWeeklyData()),
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: { y: { beginAtZero: true } }
+      }
     });
-  }, []);
 
-  const formatLabel = (date) => {
-    const weekdays = ["月", "火", "水", "木", "金", "土", "日"];
-    return weekdays[(date.getDay() + 6) % 7];
-  };
+    document.getElementById("startBtn").onclick = async () => {
+      walking = true;
+      steps = 0;
+      magnitudes = [];
+      startTime = Date.now();
 
-  const chartData = weekDates.map((date) => {
-    const key = date.toDateString();
-    return {
-      name: formatLabel(date),
-      steps: stepsData[key] || 0,
+      if (typeof DeviceMotionEvent !== 'undefined' &&
+          typeof DeviceMotionEvent.requestPermission === 'function') {
+        await DeviceMotionEvent.requestPermission();
+      }
+
+      resultDiv.innerText = "計測中...";
+      analysisDiv.innerText = "";
     };
-  });
 
-  const handleInputChange = (dateKey, value) => {
-    setStepsData({
-      ...stepsData,
-      [dateKey]: Number(value),
+    document.getElementById("stopBtn").onclick = () => {
+      walking = false;
+      dailyData[todayKey] += steps;
+      localStorage.setItem("dailySteps", JSON.stringify(dailyData));
+      analyzeWalk();
+      steps = 0;
+      updateUI();
+      updateGraph();
+    };
+
+    window.addEventListener("devicemotion", (event) => {
+      if (!walking) return;
+      const acc = event.accelerationIncludingGravity;
+      if (!acc) return;
+      const magnitude = Math.sqrt(acc.x*acc.x + acc.y*acc.y + acc.z*acc.z);
+      magnitudes.push(magnitude);
+      const now = Date.now();
+      if (magnitude > STEP_THRESHOLD && now - lastStepTime > STEP_INTERVAL) {
+        steps++;
+        lastStepTime = now;
+      }
     });
-  };
 
-  return (
-    <div className="p-6 grid gap-6">
-      <Card className="rounded-2xl shadow-lg">
-        <CardContent className="p-6">
-          <h2 className="text-2xl font-bold mb-4">今週の歩数グラフ（月〜日）</h2>
+    function analyzeWalk() {
+      const durationMin = (Date.now() - startTime) / 60000;
+      const cadence = durationMin > 0 ? Math.round(steps / durationMin) : 0;
+      let paceType = cadence < 90 ? "ゆっくり" : cadence < 120 ? "標準" : "速歩";
+      const avg = magnitudes.reduce((a,b)=>a+b,0) / magnitudes.length;
+      const variance = magnitudes.reduce((a,b)=>a+(b-avg)**2,0) / magnitudes.length;
+      let stability = variance < 5 ? "とても安定" : variance < 15 ? "安定" : "やや不安定";
+      analysisDiv.innerHTML = `歩行テンポ：${cadence} 歩/分（${paceType}）<br>歩行安定性：${stability}`;
+    }
 
-          <div className="grid gap-3 mb-6">
-            {weekDates.map((date) => {
-              const key = date.toDateString();
-              return (
-                <div key={key} className="flex items-center gap-4">
-                  <span className="w-12 font-medium">
-                    {formatLabel(date)}
-                  </span>
-                  <input
-                    type="number"
-                    value={stepsData[key] || ""}
-                    onChange={(e) =>
-                      handleInputChange(key, e.target.value)
-                    }
-                    className="border rounded-xl p-2 w-32"
-                    placeholder="歩数"
-                  />
-                </div>
-              );
-            })}
-          </div>
+    function updateGraph() {
+      const weekly = getWeeklyData();
+      chart.data.labels = Object.keys(weekly);
+      chart.data.datasets[0].data = Object.values(weekly);
+      chart.update();
+    }
+  </script>
 
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="steps" radius={[12, 12, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
+</body>
+</html>
