@@ -2,8 +2,9 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>AI歩き方診断（週別グラフ版）</title>
+  <title>AI歩き方診断（今週 月〜日表示）</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -60,7 +61,7 @@
 </head>
 <body>
 
-  <h1>AI歩き方診断（週別表示）</h1>
+  <h1>AI歩き方診断（今週 月〜日表示）</h1>
 
   <button id="startBtn">計測開始</button>
   <button id="stopBtn">計測停止</button>
@@ -74,135 +75,151 @@
 
   <canvas id="stepChart" width="400" height="200"></canvas>
 
-  <script>
-    const DAILY_GOAL = 9000;
+<script>
+const DAILY_GOAL = 9000;
 
-    let steps = 0;
-    let walking = false;
-    let lastStepTime = 0;
-    let startTime = 0;
-    let magnitudes = [];
+let steps = 0;
+let walking = false;
+let lastStepTime = 0;
+let startTime = 0;
+let magnitudes = [];
 
-    const STEP_THRESHOLD = 12;
-    const STEP_INTERVAL = 300;
+const STEP_THRESHOLD = 12;
+const STEP_INTERVAL = 300;
 
-    function getTodayKey() {
-      const today = new Date();
-      return today.getFullYear() + "-" +
-             String(today.getMonth()+1).padStart(2,'0') + "-" +
-             String(today.getDate()).padStart(2,'0');
-    }
+function getTodayKey() {
+  const today = new Date();
+  return today.getFullYear() + "-" +
+         String(today.getMonth()+1).padStart(2,'0') + "-" +
+         String(today.getDate()).padStart(2,'0');
+}
 
-    function getWeekKey(dateStr) {
-      const date = new Date(dateStr);
-      const firstDay = new Date(date.getFullYear(), 0, 1);
-      const pastDays = (date - firstDay) / 86400000;
-      const week = Math.ceil((pastDays + firstDay.getDay() + 1) / 7);
-      return `${date.getFullYear()}-W${week}`;
-    }
+// 🔥 今週（月曜〜日曜）のキー配列を取得
+function getThisWeekDates() {
+  const today = new Date();
+  const day = today.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
 
-    let dailyData = JSON.parse(localStorage.getItem("dailySteps")) || {};
-    const todayKey = getTodayKey();
-    if (!dailyData[todayKey]) dailyData[todayKey] = 0;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() + diffToMonday);
 
-    const resultDiv = document.getElementById("result");
-    const analysisDiv = document.getElementById("analysis");
-    const progressBar = document.getElementById("progressBar");
+  let dates = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
 
-    function updateUI() {
-      const todaySteps = dailyData[todayKey];
-      resultDiv.innerText = `今日の歩数：${todaySteps}歩`;
+    const key = d.getFullYear() + "-" +
+      String(d.getMonth()+1).padStart(2,'0') + "-" +
+      String(d.getDate()).padStart(2,'0');
 
-      let percent = Math.min((todaySteps / DAILY_GOAL) * 100, 100);
-      progressBar.style.width = percent + "%";
-      progressBar.innerText = Math.floor(percent) + "%";
-      progressBar.style.background = percent >= 100 ? "#2196F3" : "#4CAF50";
-    }
+    dates.push(key);
+  }
+  return dates;
+}
 
-    updateUI();
+let dailyData = JSON.parse(localStorage.getItem("dailySteps")) || {};
+const todayKey = getTodayKey();
+if (!dailyData[todayKey]) dailyData[todayKey] = 0;
 
-    function getWeeklyData() {
-      let weekly = {};
-      for (let date in dailyData) {
-        let weekKey = getWeekKey(date);
-        if (!weekly[weekKey]) weekly[weekKey] = 0;
-        weekly[weekKey] += dailyData[date];
-      }
-      return weekly;
-    }
+const resultDiv = document.getElementById("result");
+const analysisDiv = document.getElementById("analysis");
+const progressBar = document.getElementById("progressBar");
 
-    const ctx = document.getElementById('stepChart').getContext('2d');
-    const chart = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels: Object.keys(getWeeklyData()),
-        datasets: [{
-          label: '週別歩数',
-          data: Object.values(getWeeklyData()),
-          borderWidth: 1
-        }]
-      },
-      options: {
-        responsive: true,
-        scales: { y: { beginAtZero: true } }
-      }
-    });
+function updateUI() {
+  const todaySteps = dailyData[todayKey];
+  resultDiv.innerText = `今日の歩数：${todaySteps}歩`;
 
-    document.getElementById("startBtn").onclick = async () => {
-      walking = true;
-      steps = 0;
-      magnitudes = [];
-      startTime = Date.now();
+  let percent = Math.min((todaySteps / DAILY_GOAL) * 100, 100);
+  progressBar.style.width = percent + "%";
+  progressBar.innerText = Math.floor(percent) + "%";
+  progressBar.style.background = percent >= 100 ? "#2196F3" : "#4CAF50";
+}
 
-      if (typeof DeviceMotionEvent !== 'undefined' &&
-          typeof DeviceMotionEvent.requestPermission === 'function') {
-        await DeviceMotionEvent.requestPermission();
-      }
+updateUI();
 
-      resultDiv.innerText = "計測中...";
-      analysisDiv.innerText = "";
-    };
+const ctx = document.getElementById('stepChart').getContext('2d');
+const chart = new Chart(ctx, {
+  type: 'bar',
+  data: {
+    labels: [],
+    datasets: [{
+      label: '今週の歩数（月〜日）',
+      data: [],
+      borderWidth: 1
+    }]
+  },
+  options: {
+    responsive: true,
+    scales: { y: { beginAtZero: true } }
+  }
+});
 
-    document.getElementById("stopBtn").onclick = () => {
-      walking = false;
-      dailyData[todayKey] += steps;
-      localStorage.setItem("dailySteps", JSON.stringify(dailyData));
-      analyzeWalk();
-      steps = 0;
-      updateUI();
-      updateGraph();
-    };
+function updateGraph() {
+  const weekDates = getThisWeekDates();
 
-    window.addEventListener("devicemotion", (event) => {
-      if (!walking) return;
-      const acc = event.accelerationIncludingGravity;
-      if (!acc) return;
-      const magnitude = Math.sqrt(acc.x*acc.x + acc.y*acc.y + acc.z*acc.z);
-      magnitudes.push(magnitude);
-      const now = Date.now();
-      if (magnitude > STEP_THRESHOLD && now - lastStepTime > STEP_INTERVAL) {
-        steps++;
-        lastStepTime = now;
-      }
-    });
+  chart.data.labels = weekDates.map(d => d.slice(5));
+  chart.data.datasets[0].data =
+      weekDates.map(d => dailyData[d] || 0);
 
-    function analyzeWalk() {
-      const durationMin = (Date.now() - startTime) / 60000;
-      const cadence = durationMin > 0 ? Math.round(steps / durationMin) : 0;
-      let paceType = cadence < 90 ? "ゆっくり" : cadence < 120 ? "標準" : "速歩";
-      const avg = magnitudes.reduce((a,b)=>a+b,0) / magnitudes.length;
-      const variance = magnitudes.reduce((a,b)=>a+(b-avg)**2,0) / magnitudes.length;
-      let stability = variance < 5 ? "とても安定" : variance < 15 ? "安定" : "やや不安定";
-      analysisDiv.innerHTML = `歩行テンポ：${cadence} 歩/分（${paceType}）<br>歩行安定性：${stability}`;
-    }
+  chart.update();
+}
 
-    function updateGraph() {
-      const weekly = getWeeklyData();
-      chart.data.labels = Object.keys(weekly);
-      chart.data.datasets[0].data = Object.values(weekly);
-      chart.update();
-    }
-  </script>
+updateGraph();
+
+document.getElementById("startBtn").onclick = async () => {
+  walking = true;
+  steps = 0;
+  magnitudes = [];
+  startTime = Date.now();
+
+  if (typeof DeviceMotionEvent !== 'undefined' &&
+      typeof DeviceMotionEvent.requestPermission === 'function') {
+    await DeviceMotionEvent.requestPermission();
+  }
+
+  resultDiv.innerText = "計測中...";
+  analysisDiv.innerText = "";
+};
+
+document.getElementById("stopBtn").onclick = () => {
+  walking = false;
+  dailyData[todayKey] += steps;
+  localStorage.setItem("dailySteps", JSON.stringify(dailyData));
+  analyzeWalk();
+  steps = 0;
+  updateUI();
+  updateGraph();
+};
+
+window.addEventListener("devicemotion", (event) => {
+  if (!walking) return;
+  const acc = event.accelerationIncludingGravity;
+  if (!acc) return;
+  const magnitude = Math.sqrt(acc.x*acc.x + acc.y*acc.y + acc.z*acc.z);
+  magnitudes.push(magnitude);
+  const now = Date.now();
+  if (magnitude > STEP_THRESHOLD && now - lastStepTime > STEP_INTERVAL) {
+    steps++;
+    lastStepTime = now;
+  }
+});
+
+function analyzeWalk() {
+  const durationMin = (Date.now() - startTime) / 60000;
+  const cadence = durationMin > 0 ? Math.round(steps / durationMin) : 0;
+  let paceType = cadence < 90 ? "ゆっくり" :
+                 cadence < 120 ? "標準" : "速歩";
+
+  const avg = magnitudes.reduce((a,b)=>a+b,0) / magnitudes.length;
+  const variance = magnitudes.reduce((a,b)=>a+(b-avg)**2,0) / magnitudes.length;
+  let stability = variance < 5 ? "とても安定" :
+                  variance < 15 ? "安定" : "やや不安定";
+
+  analysisDiv.innerHTML =
+    `歩行テンポ：${cadence} 歩/分（${paceType}）<br>` +
+    `歩行安定性：${stability}`;
+}
+</script>
 
 </body>
 </html>
