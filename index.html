@@ -2,134 +2,187 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>世界冒険歩数計（センサー版）</title>
+<title>AI歩き方診断</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
-body {
-    text-align: center;
-    font-family: Arial, sans-serif;
-    background: linear-gradient(to right, #4facfe, #00f2fe);
-    color: white;
+body{
+  text-align:center;
+  font-family:Arial, sans-serif;
+  background:linear-gradient(to right,#667eea,#764ba2);
+  color:white;
+  margin:0;
+  padding:20px;
 }
 
-button {
-    padding: 25px 60px;
-    font-size: 28px;
-    font-weight: bold;
-    border-radius: 20px;
+h1{margin-top:10px;}
+
+button{
+  width:80%;
+  max-width:400px;
+  padding:20px;
+  font-size:22px;
+  font-weight:bold;
+  border:none;
+  border-radius:20px;
+  margin:15px;
+  cursor:pointer;
 }
 
-#startBtn { background: green; color: white; }
-#resetBtn { background: orange; color: white; }
+#startBtn{background:green;color:white;}
+#resetBtn{background:orange;color:white;}
 
-#progressBar {
-    width: 80%;
-    height: 20px;
-    background: white;
-    margin: 20px auto;
-    border-radius: 10px;
-    overflow: hidden;
+.card{
+  background:rgba(255,255,255,0.15);
+  padding:15px;
+  border-radius:20px;
+  margin:15px auto;
+  max-width:500px;
 }
 
-#progress {
-    height: 100%;
-    width: 0%;
-    background: yellow;
+.big{
+  font-size:28px;
+  font-weight:bold;
 }
 </style>
 </head>
 
 <body>
 
-<h1>🌍 世界冒険歩数計</h1>
+<h1>🤖 AI歩き方診断</h1>
 
-<h2>歩数: <span id="step">0</span></h2>
-<h2 id="location">現在地：福井</h2>
-
-<div id="progressBar">
-    <div id="progress"></div>
+<div class="card">
+  <div class="big">歩数: <span id="step">0</span></div>
 </div>
 
-<button id="startBtn" onclick="requestPermission()">開始</button>
-<button id="resetBtn" onclick="resetSteps()">リセット</button>
+<div class="card">
+  <div id="result" class="big">診断結果：まだデータ不足</div>
+  <div id="score"></div>
+</div>
+
+<button id="startBtn" onclick="requestPermission()">診断開始</button>
+<button id="resetBtn" onclick="resetData()">リセット</button>
 
 <p id="status"></p>
 
 <script>
 let steps = 0;
 let lastStepTime = 0;
-let threshold = 15;   // 揺れの強さ基準（調整可）
+let threshold = 15;
 
-function requestPermission() {
-    document.getElementById("status").textContent = "センサー許可を確認中...";
+let stepIntervals = [];
+let accelerations = [];
 
-    if (typeof DeviceMotionEvent !== "undefined" &&
-        typeof DeviceMotionEvent.requestPermission === "function") {
+function requestPermission(){
+  document.getElementById("status").textContent="センサー確認中...";
 
-        DeviceMotionEvent.requestPermission()
-        .then(response => {
-            if (response === "granted") {
-                startDetect();
-                document.getElementById("status").textContent = "検出開始！歩いてみよう 👟";
-            } else {
-                document.getElementById("status").textContent = "許可されませんでした";
-            }
-        })
-        .catch(console.error);
+  if(typeof DeviceMotionEvent !== "undefined" &&
+     typeof DeviceMotionEvent.requestPermission === "function"){
 
-    } else {
+    DeviceMotionEvent.requestPermission()
+    .then(response=>{
+      if(response==="granted"){
         startDetect();
-        document.getElementById("status").textContent = "検出開始！歩いてみよう 👟";
-    }
-}
-
-function startDetect() {
-    window.addEventListener("devicemotion", function(event) {
-        let acc = event.accelerationIncludingGravity;
-        if (!acc) return;
-
-        let total = Math.sqrt(
-            (acc.x || 0) * (acc.x || 0) +
-            (acc.y || 0) * (acc.y || 0) +
-            (acc.z || 0) * (acc.z || 0)
-        );
-
-        let now = Date.now();
-
-        if (total > threshold && now - lastStepTime > 500) {
-            steps++;
-            lastStepTime = now;
-
-            document.getElementById("step").textContent = steps;
-            updateLocation();
-            updateProgress();
-        }
+        document.getElementById("status").textContent="検出開始！歩いてみよう 👟";
+      }else{
+        document.getElementById("status").textContent="許可されませんでした";
+      }
     });
+
+  }else{
+    startDetect();
+    document.getElementById("status").textContent="検出開始！歩いてみよう 👟";
+  }
 }
 
-function updateLocation() {
-    let location = "福井";
+function startDetect(){
+  window.addEventListener("devicemotion",function(event){
 
-    if (steps >= 20000) location = "🌍 世界一周達成！🎉";
-    else if (steps >= 10000) location = "🇺🇸 アメリカ";
-    else if (steps >= 6000) location = "🇰🇷 韓国";
-    else if (steps >= 3000) location = "大阪";
-    else if (steps >= 1000) location = "東京";
+    let acc=event.accelerationIncludingGravity;
+    if(!acc)return;
 
-    document.getElementById("location").textContent = "現在地：" + location;
+    let total=Math.sqrt(
+      (acc.x||0)**2+
+      (acc.y||0)**2+
+      (acc.z||0)**2
+    );
+
+    let now=Date.now();
+
+    if(total>threshold && now-lastStepTime>500){
+
+      if(lastStepTime!==0){
+        stepIntervals.push(now-lastStepTime);
+      }
+
+      accelerations.push(total);
+
+      steps++;
+      lastStepTime=now;
+
+      document.getElementById("step").textContent=steps;
+
+      if(steps>=20){
+        diagnose();
+      }
+    }
+  });
 }
 
-function updateProgress() {
-    let percent = (steps / 20000) * 100;
-    if (percent > 100) percent = 100;
-    document.getElementById("progress").style.width = percent + "%";
+function diagnose(){
+
+  let avgInterval=average(stepIntervals);
+  let intervalStd=std(stepIntervals);
+  let avgAcc=average(accelerations);
+
+  let result="";
+  let score=100;
+
+  // 安定性評価
+  score -= intervalStd/10;
+  score -= (avgAcc-16)*2;
+
+  if(score>100)score=100;
+  if(score<0)score=0;
+
+  if(intervalStd<100 && avgAcc<18){
+    result="✨ 理想的で安定した歩き方";
+  }
+  else if(avgAcc>22){
+    result="⚠ 衝撃が強い歩き方（ドタドタ傾向）";
+  }
+  else if(intervalStd>200){
+    result="😵 リズム不安定（疲労の可能性）";
+  }
+  else{
+    result="🙂 標準的な歩き方";
+  }
+
+  document.getElementById("result").textContent="診断結果："+result;
+  document.getElementById("score").textContent="AIスコア："+Math.round(score)+" / 100";
 }
 
-function resetSteps() {
-    steps = 0;
-    document.getElementById("step").textContent = 0;
-    document.getElementById("location").textContent = "現在地：福井";
-    document.getElementById("progress").style.width = "0%";
+function average(arr){
+  if(arr.length===0)return 0;
+  return arr.reduce((a,b)=>a+b,0)/arr.length;
+}
+
+function std(arr){
+  if(arr.length===0)return 0;
+  let avg=average(arr);
+  let variance=arr.reduce((a,b)=>a+(b-avg)**2,0)/arr.length;
+  return Math.sqrt(variance);
+}
+
+function resetData(){
+  steps=0;
+  stepIntervals=[];
+  accelerations=[];
+  lastStepTime=0;
+
+  document.getElementById("step").textContent=0;
+  document.getElementById("result").textContent="診断結果：まだデータ不足";
+  document.getElementById("score").textContent="";
 }
 </script>
 
