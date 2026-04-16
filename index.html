@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>AI歩き方診断 + グラフ</title>
+  <title>AI歩き方診断 + グラフ（実センサー版）</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
@@ -14,10 +14,10 @@
     }
 
     button {
-      font-size: 20px;
-      padding: 15px 30px;
+      font-size: 22px;
+      padding: 18px 40px;
       margin: 10px;
-      border-radius: 12px;
+      border-radius: 14px;
       border: none;
       cursor: pointer;
     }
@@ -40,7 +40,7 @@
 </head>
 <body>
 
-  <h1>AI歩き方診断</h1>
+  <h1>AI歩き方診断（本物センサー版）</h1>
 
   <button id="startBtn">計測開始</button>
   <button id="stopBtn">計測停止</button>
@@ -52,8 +52,11 @@
   <script>
     let steps = 0;
     let walking = false;
-    let stepHistory = JSON.parse(localStorage.getItem("stepHistory")) || [];
+    let lastStepTime = 0;
+    const STEP_THRESHOLD = 12; // 感度（大きいほど反応しにくい）
+    const STEP_INTERVAL = 300; // 最小間隔(ms)
 
+    let stepHistory = JSON.parse(localStorage.getItem("stepHistory")) || [];
     const resultDiv = document.getElementById("result");
 
     const ctx = document.getElementById('stepChart').getContext('2d');
@@ -71,15 +74,22 @@
       options: {
         responsive: true,
         scales: {
-          y: {
-            beginAtZero: true
-          }
+          y: { beginAtZero: true }
         }
       }
     });
 
-    document.getElementById("startBtn").onclick = () => {
+    document.getElementById("startBtn").onclick = async () => {
+      steps = 0;
       walking = true;
+
+      // iPhone用許可
+      if (typeof DeviceMotionEvent !== 'undefined' &&
+          typeof DeviceMotionEvent.requestPermission === 'function') {
+        await DeviceMotionEvent.requestPermission();
+      }
+
+      resultDiv.innerText = "計測中...";
     };
 
     document.getElementById("stopBtn").onclick = () => {
@@ -89,12 +99,27 @@
       updateGraph();
     };
 
-    function simulateStep() {
-      if (walking) {
-        steps += Math.floor(Math.random() * 3); // 疑似歩数
+    // ★本物の加速度センサー処理
+    window.addEventListener("devicemotion", (event) => {
+      if (!walking) return;
+
+      const acc = event.accelerationIncludingGravity;
+      if (!acc) return;
+
+      const magnitude = Math.sqrt(
+        acc.x * acc.x +
+        acc.y * acc.y +
+        acc.z * acc.z
+      );
+
+      const now = Date.now();
+
+      if (magnitude > STEP_THRESHOLD &&
+          now - lastStepTime > STEP_INTERVAL) {
+        steps++;
+        lastStepTime = now;
       }
-      requestAnimationFrame(simulateStep);
-    }
+    });
 
     function diagnose() {
       let message = "";
@@ -120,8 +145,6 @@
       chart.data.datasets[0].data = stepHistory;
       chart.update();
     }
-
-    simulateStep();
   </script>
 
 </body>
