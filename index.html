@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>AI歩き方診断（週別グラフ版）</title>
+  <title>AI歩き方診断（常に直近7日表示）</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
@@ -60,7 +60,7 @@
 </head>
 <body>
 
-  <h1>AI歩き方診断（週別表示）</h1>
+  <h1>AI歩き方診断（直近7日固定表示）</h1>
 
   <button id="startBtn">計測開始</button>
   <button id="stopBtn">計測停止</button>
@@ -76,6 +76,8 @@
 
   <script>
     const DAILY_GOAL = 9000;
+    const STEP_THRESHOLD = 12;
+    const STEP_INTERVAL = 300;
 
     let steps = 0;
     let walking = false;
@@ -83,26 +85,24 @@
     let startTime = 0;
     let magnitudes = [];
 
-    const STEP_THRESHOLD = 12;
-    const STEP_INTERVAL = 300;
-
-    function getTodayKey() {
-      const today = new Date();
-      return today.getFullYear() + "-" +
-             String(today.getMonth()+1).padStart(2,'0') + "-" +
-             String(today.getDate()).padStart(2,'0');
+    function formatDate(date) {
+      return date.getFullYear() + "-" +
+             String(date.getMonth()+1).padStart(2,'0') + "-" +
+             String(date.getDate()).padStart(2,'0');
     }
 
-    function getWeekKey(dateStr) {
-      const date = new Date(dateStr);
-      const firstDay = new Date(date.getFullYear(), 0, 1);
-      const pastDays = (date - firstDay) / 86400000;
-      const week = Math.ceil((pastDays + firstDay.getDay() + 1) / 7);
-      return `${date.getFullYear()}-W${week}`;
+    function getLast7Days() {
+      let days = [];
+      for (let i = 6; i >= 0; i--) {
+        let d = new Date();
+        d.setDate(d.getDate() - i);
+        days.push(formatDate(d));
+      }
+      return days;
     }
 
     let dailyData = JSON.parse(localStorage.getItem("dailySteps")) || {};
-    const todayKey = getTodayKey();
+    const todayKey = formatDate(new Date());
     if (!dailyData[todayKey]) dailyData[todayKey] = 0;
 
     const resultDiv = document.getElementById("result");
@@ -121,24 +121,24 @@
 
     updateUI();
 
-    function getWeeklyData() {
-      let weekly = {};
-      for (let date in dailyData) {
-        let weekKey = getWeekKey(date);
-        if (!weekly[weekKey]) weekly[weekKey] = 0;
-        weekly[weekKey] += dailyData[date];
-      }
-      return weekly;
+    function getWeeklyFixedData() {
+      const last7 = getLast7Days();
+      return {
+        labels: last7,
+        data: last7.map(d => dailyData[d] || 0)
+      };
     }
 
     const ctx = document.getElementById('stepChart').getContext('2d');
+    const weekly = getWeeklyFixedData();
+
     const chart = new Chart(ctx, {
       type: 'bar',
       data: {
-        labels: Object.keys(getWeeklyData()),
+        labels: weekly.labels,
         datasets: [{
-          label: '週別歩数',
-          data: Object.values(getWeeklyData()),
+          label: '直近7日間の歩数',
+          data: weekly.data,
           borderWidth: 1
         }]
       },
@@ -197,9 +197,9 @@
     }
 
     function updateGraph() {
-      const weekly = getWeeklyData();
-      chart.data.labels = Object.keys(weekly);
-      chart.data.datasets[0].data = Object.values(weekly);
+      const weekly = getWeeklyFixedData();
+      chart.data.labels = weekly.labels;
+      chart.data.datasets[0].data = weekly.data;
       chart.update();
     }
   </script>
