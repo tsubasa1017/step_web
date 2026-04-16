@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>AI歩き方診断（日別累計版）</title>
+  <title>AI歩き方診断（日別累計＋目標バー）</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
@@ -30,6 +30,26 @@
       margin-top: 20px;
     }
 
+    .progress-container {
+      width: 80%;
+      height: 30px;
+      background: #ddd;
+      border-radius: 20px;
+      margin: 20px auto;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: #4CAF50;
+      text-align: center;
+      line-height: 30px;
+      color: white;
+      font-weight: bold;
+      transition: width 0.3s;
+    }
+
     canvas {
       margin-top: 30px;
       background: white;
@@ -40,23 +60,28 @@
 </head>
 <body>
 
-  <h1>AI歩き方診断（日別累計）</h1>
+  <h1>AI歩き方診断（日別累計＋目標9000歩）</h1>
 
   <button id="startBtn">計測開始</button>
   <button id="stopBtn">計測停止</button>
 
   <div id="result">今日の歩数：0歩</div>
 
+  <div class="progress-container">
+    <div class="progress-bar" id="progressBar">0%</div>
+  </div>
+
   <canvas id="stepChart" width="400" height="200"></canvas>
 
   <script>
+    const DAILY_GOAL = 9000;
+
     let steps = 0;
     let walking = false;
     let lastStepTime = 0;
     const STEP_THRESHOLD = 12;
     const STEP_INTERVAL = 300;
 
-    // 日付キー取得
     function getTodayKey() {
       const today = new Date();
       return today.getFullYear() + "-" +
@@ -72,7 +97,24 @@
     }
 
     const resultDiv = document.getElementById("result");
-    resultDiv.innerText = `今日の歩数：${dailyData[todayKey]}歩`;
+    const progressBar = document.getElementById("progressBar");
+
+    function updateUI() {
+      const todaySteps = dailyData[todayKey];
+      resultDiv.innerText = `今日の歩数：${todaySteps}歩`;
+
+      let percent = Math.min((todaySteps / DAILY_GOAL) * 100, 100);
+      progressBar.style.width = percent + "%";
+      progressBar.innerText = Math.floor(percent) + "%";
+
+      if (percent >= 100) {
+        progressBar.style.background = "#2196F3";
+      } else {
+        progressBar.style.background = "#4CAF50";
+      }
+    }
+
+    updateUI();
 
     const ctx = document.getElementById('stepChart').getContext('2d');
     const chart = new Chart(ctx, {
@@ -110,10 +152,9 @@
       dailyData[todayKey] += steps;
       localStorage.setItem("dailySteps", JSON.stringify(dailyData));
 
-      resultDiv.innerText = `今日の歩数：${dailyData[todayKey]}歩`;
-
-      updateGraph();
       steps = 0;
+      updateUI();
+      updateGraph();
     };
 
     window.addEventListener("devicemotion", (event) => {
@@ -123,9 +164,7 @@
       if (!acc) return;
 
       const magnitude = Math.sqrt(
-        acc.x * acc.x +
-        acc.y * acc.y +
-        acc.z * acc.z
+        acc.x * acc.x + acc.y * acc.y + acc.z * acc.z
       );
 
       const now = Date.now();
