@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>AI歩き方診断（今週 月〜日表示）</title>
+  <title>AI歩き方診断（歩数/カロリー切替）</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
@@ -15,28 +15,29 @@
     }
 
     button {
-      font-size: 22px;
-      padding: 18px 40px;
-      margin: 10px;
-      border-radius: 14px;
+      font-size: 18px;
+      padding: 12px 24px;
+      margin: 8px;
+      border-radius: 10px;
       border: none;
       cursor: pointer;
     }
 
     #startBtn { background: #4CAF50; color: white; }
     #stopBtn { background: #f44336; color: white; }
+    #toggleBtn { background: #ff9800; color: white; }
 
     #result, #analysis {
-      font-size: 20px;
-      margin-top: 15px;
+      font-size: 18px;
+      margin-top: 10px;
     }
 
     .progress-container {
       width: 80%;
-      height: 30px;
+      height: 25px;
       background: #ddd;
       border-radius: 20px;
-      margin: 20px auto;
+      margin: 15px auto;
       overflow: hidden;
     }
 
@@ -45,14 +46,14 @@
       width: 0%;
       background: #4CAF50;
       text-align: center;
-      line-height: 30px;
+      line-height: 25px;
       color: white;
       font-weight: bold;
       transition: width 0.3s;
     }
 
     canvas {
-      margin-top: 30px;
+      margin-top: 20px;
       background: white;
       border-radius: 12px;
       padding: 10px;
@@ -61,28 +62,31 @@
 </head>
 <body>
 
-  <h1>AI歩き方診断（今週 月〜日表示）</h1>
+<h1>AI歩き方診断（今週 月〜日表示）</h1>
 
-  <button id="startBtn">計測開始</button>
-  <button id="stopBtn">計測停止</button>
+<button id="startBtn">計測開始</button>
+<button id="stopBtn">計測停止</button>
+<button id="toggleBtn">🔥 カロリー表示に切替</button>
 
-  <div id="result">今日の歩数：0歩</div>
-  <div id="analysis"></div>
+<div id="result">今日の歩数：0歩</div>
+<div id="analysis"></div>
 
-  <div class="progress-container">
-    <div class="progress-bar" id="progressBar">0%</div>
-  </div>
+<div class="progress-container">
+  <div class="progress-bar" id="progressBar">0%</div>
+</div>
 
-  <canvas id="stepChart" width="400" height="200"></canvas>
+<canvas id="stepChart" width="400" height="200"></canvas>
 
 <script>
 const DAILY_GOAL = 9000;
+const CALORIE_PER_STEP = 0.04;
 
 let steps = 0;
 let walking = false;
 let lastStepTime = 0;
 let startTime = 0;
 let magnitudes = [];
+let displayMode = "steps";
 
 const STEP_THRESHOLD = 12;
 const STEP_INTERVAL = 300;
@@ -94,7 +98,6 @@ function getTodayKey() {
          String(today.getDate()).padStart(2,'0');
 }
 
-// 🔥 今週（月曜〜日曜）のキー配列を取得
 function getThisWeekDates() {
   const today = new Date();
   const day = today.getDay();
@@ -135,15 +138,13 @@ function updateUI() {
   progressBar.style.background = percent >= 100 ? "#2196F3" : "#4CAF50";
 }
 
-updateUI();
-
 const ctx = document.getElementById('stepChart').getContext('2d');
 const chart = new Chart(ctx, {
   type: 'bar',
   data: {
     labels: [],
     datasets: [{
-      label: '今週の歩数（月〜日）',
+      label: '',
       data: [],
       borderWidth: 1
     }]
@@ -156,15 +157,34 @@ const chart = new Chart(ctx, {
 
 function updateGraph() {
   const weekDates = getThisWeekDates();
-
   chart.data.labels = weekDates.map(d => d.slice(5));
-  chart.data.datasets[0].data =
+
+  if (displayMode === "steps") {
+    chart.data.datasets[0].label = "今週の歩数（月〜日）";
+    chart.data.datasets[0].data =
       weekDates.map(d => dailyData[d] || 0);
+  } else {
+    chart.data.datasets[0].label = "今週の消費カロリー（kcal）";
+    chart.data.datasets[0].data =
+      weekDates.map(d => (dailyData[d] || 0) * CALORIE_PER_STEP);
+  }
 
   chart.update();
 }
 
+updateUI();
 updateGraph();
+
+document.getElementById("toggleBtn").onclick = function() {
+  if (displayMode === "steps") {
+    displayMode = "calories";
+    this.innerText = "👣 歩数表示に切替";
+  } else {
+    displayMode = "steps";
+    this.innerText = "🔥 カロリー表示に切替";
+  }
+  updateGraph();
+};
 
 document.getElementById("startBtn").onclick = async () => {
   walking = true;
@@ -210,8 +230,12 @@ function analyzeWalk() {
   let paceType = cadence < 90 ? "ゆっくり" :
                  cadence < 120 ? "標準" : "速歩";
 
-  const avg = magnitudes.reduce((a,b)=>a+b,0) / magnitudes.length;
-  const variance = magnitudes.reduce((a,b)=>a+(b-avg)**2,0) / magnitudes.length;
+  const avg = magnitudes.length ?
+    magnitudes.reduce((a,b)=>a+b,0) / magnitudes.length : 0;
+
+  const variance = magnitudes.length ?
+    magnitudes.reduce((a,b)=>a+(b-avg)**2,0) / magnitudes.length : 0;
+
   let stability = variance < 5 ? "とても安定" :
                   variance < 15 ? "安定" : "やや不安定";
 
