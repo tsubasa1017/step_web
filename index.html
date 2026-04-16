@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>AI歩き方診断 + グラフ（実センサー版）</title>
+  <title>AI歩き方診断（日別累計版）</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
@@ -40,12 +40,12 @@
 </head>
 <body>
 
-  <h1>AI歩き方診断（本物センサー版）</h1>
+  <h1>AI歩き方診断（日別累計）</h1>
 
   <button id="startBtn">計測開始</button>
   <button id="stopBtn">計測停止</button>
 
-  <div id="result">結果がここに表示されます</div>
+  <div id="result">今日の歩数：0歩</div>
 
   <canvas id="stepChart" width="400" height="200"></canvas>
 
@@ -53,22 +53,36 @@
     let steps = 0;
     let walking = false;
     let lastStepTime = 0;
-    const STEP_THRESHOLD = 12; // 感度（大きいほど反応しにくい）
-    const STEP_INTERVAL = 300; // 最小間隔(ms)
+    const STEP_THRESHOLD = 12;
+    const STEP_INTERVAL = 300;
 
-    let stepHistory = JSON.parse(localStorage.getItem("stepHistory")) || [];
+    // 日付キー取得
+    function getTodayKey() {
+      const today = new Date();
+      return today.getFullYear() + "-" +
+             String(today.getMonth()+1).padStart(2,'0') + "-" +
+             String(today.getDate()).padStart(2,'0');
+    }
+
+    let dailyData = JSON.parse(localStorage.getItem("dailySteps")) || {};
+    const todayKey = getTodayKey();
+
+    if (!dailyData[todayKey]) {
+      dailyData[todayKey] = 0;
+    }
+
     const resultDiv = document.getElementById("result");
+    resultDiv.innerText = `今日の歩数：${dailyData[todayKey]}歩`;
 
     const ctx = document.getElementById('stepChart').getContext('2d');
     const chart = new Chart(ctx, {
-      type: 'line',
+      type: 'bar',
       data: {
-        labels: stepHistory.map((_, i) => i + 1),
+        labels: Object.keys(dailyData),
         datasets: [{
-          label: '歩数推移',
-          data: stepHistory,
-          borderWidth: 2,
-          tension: 0.3
+          label: '日別歩数',
+          data: Object.values(dailyData),
+          borderWidth: 1
         }]
       },
       options: {
@@ -80,10 +94,8 @@
     });
 
     document.getElementById("startBtn").onclick = async () => {
-      steps = 0;
       walking = true;
 
-      // iPhone用許可
       if (typeof DeviceMotionEvent !== 'undefined' &&
           typeof DeviceMotionEvent.requestPermission === 'function') {
         await DeviceMotionEvent.requestPermission();
@@ -94,12 +106,16 @@
 
     document.getElementById("stopBtn").onclick = () => {
       walking = false;
-      diagnose();
-      saveData();
+
+      dailyData[todayKey] += steps;
+      localStorage.setItem("dailySteps", JSON.stringify(dailyData));
+
+      resultDiv.innerText = `今日の歩数：${dailyData[todayKey]}歩`;
+
       updateGraph();
+      steps = 0;
     };
 
-    // ★本物の加速度センサー処理
     window.addEventListener("devicemotion", (event) => {
       if (!walking) return;
 
@@ -121,28 +137,9 @@
       }
     });
 
-    function diagnose() {
-      let message = "";
-      if (steps < 50) {
-        message = "運動不足タイプ";
-      } else if (steps < 150) {
-        message = "標準的な歩き方";
-      } else {
-        message = "アスリートタイプ";
-      }
-
-      resultDiv.innerText = `今回の歩数: ${steps}歩 → ${message}`;
-      stepHistory.push(steps);
-      steps = 0;
-    }
-
-    function saveData() {
-      localStorage.setItem("stepHistory", JSON.stringify(stepHistory));
-    }
-
     function updateGraph() {
-      chart.data.labels = stepHistory.map((_, i) => i + 1);
-      chart.data.datasets[0].data = stepHistory;
+      chart.data.labels = Object.keys(dailyData);
+      chart.data.datasets[0].data = Object.values(dailyData);
       chart.update();
     }
   </script>
