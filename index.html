@@ -1,81 +1,64 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
-  <title>AI歩き方診断（歩数/カロリー切替）</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<meta charset="UTF-8">
+<title>AI歩き方診断 完成版</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-      background: #f5f5f5;
-      margin: 0;
-      padding: 20px;
-    }
+<style>
+body{
+  font-family: Arial, sans-serif;
+  text-align:center;
+  background:#f5f5f5;
+  margin:0;
+  padding:20px;
+}
 
-    button {
-      font-size: 18px;
-      padding: 12px 24px;
-      margin: 8px;
-      border-radius: 10px;
-      border: none;
-      cursor: pointer;
-    }
+button{
+  font-size:16px;
+  padding:10px 20px;
+  margin:5px;
+  border:none;
+  border-radius:10px;
+  cursor:pointer;
+}
 
-    #startBtn { background: #4CAF50; color: white; }
-    #stopBtn { background: #f44336; color: white; }
-    #toggleBtn { background: #ff9800; color: white; }
+#startBtn{background:#4CAF50;color:white;}
+#stopBtn{background:#f44336;color:white;}
+#weekBtn{background:#2196F3;color:white;}
+#calorieBtn{background:#ff9800;color:white;}
 
-    #result, #analysis {
-      font-size: 18px;
-      margin-top: 10px;
-    }
+canvas{
+  background:white;
+  border-radius:12px;
+  padding:10px;
+  margin-top:20px;
+}
 
-    .progress-container {
-      width: 80%;
-      height: 25px;
-      background: #ddd;
-      border-radius: 20px;
-      margin: 15px auto;
-      overflow: hidden;
-    }
-
-    .progress-bar {
-      height: 100%;
-      width: 0%;
-      background: #4CAF50;
-      text-align: center;
-      line-height: 25px;
-      color: white;
-      font-weight: bold;
-      transition: width 0.3s;
-    }
-
-    canvas {
-      margin-top: 20px;
-      background: white;
-      border-radius: 12px;
-      padding: 10px;
-    }
-  </style>
+#remaining{
+  font-size:20px;
+  margin-top:10px;
+  font-weight:bold;
+}
+</style>
 </head>
 <body>
 
-<h1>AI歩き方診断（今週 月〜日表示）</h1>
+<h1>AI歩き方診断</h1>
 
 <button id="startBtn">計測開始</button>
 <button id="stopBtn">計測停止</button>
-<button id="toggleBtn">🔥 カロリー表示に切替</button>
 
-<div id="result">今日の歩数：0歩</div>
-<div id="analysis"></div>
+<h2>🏠 今日の進捗</h2>
+<canvas id="donutChart" width="250" height="250"></canvas>
+<div id="remaining"></div>
 
-<div class="progress-container">
-  <div class="progress-bar" id="progressBar">0%</div>
-</div>
+<hr>
 
-<canvas id="stepChart" width="400" height="200"></canvas>
+<button id="weekBtn">週の歩数</button>
+<button id="calorieBtn">消費カロリー</button>
+
+<canvas id="mainChart" width="400" height="200"></canvas>
 
 <script>
 const DAILY_GOAL = 9000;
@@ -86,164 +69,148 @@ let walking = false;
 let lastStepTime = 0;
 let startTime = 0;
 let magnitudes = [];
-let displayMode = "steps";
 
 const STEP_THRESHOLD = 12;
 const STEP_INTERVAL = 300;
 
-function getTodayKey() {
-  const today = new Date();
-  return today.getFullYear() + "-" +
-         String(today.getMonth()+1).padStart(2,'0') + "-" +
-         String(today.getDate()).padStart(2,'0');
+function getTodayKey(){
+  const t=new Date();
+  return t.getFullYear()+"-"+
+  String(t.getMonth()+1).padStart(2,'0')+"-"+
+  String(t.getDate()).padStart(2,'0');
 }
 
-function getThisWeekDates() {
-  const today = new Date();
-  const day = today.getDay();
-  const diffToMonday = day === 0 ? -6 : 1 - day;
+function getThisWeekDates(){
+  const today=new Date();
+  const day=today.getDay();
+  const diff=day===0?-6:1-day;
+  const monday=new Date(today);
+  monday.setDate(today.getDate()+diff);
 
-  const monday = new Date(today);
-  monday.setDate(today.getDate() + diffToMonday);
-
-  let dates = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-
-    const key = d.getFullYear() + "-" +
-      String(d.getMonth()+1).padStart(2,'0') + "-" +
-      String(d.getDate()).padStart(2,'0');
-
-    dates.push(key);
+  let arr=[];
+  for(let i=0;i<7;i++){
+    const d=new Date(monday);
+    d.setDate(monday.getDate()+i);
+    arr.push(d.getFullYear()+"-"+
+      String(d.getMonth()+1).padStart(2,'0')+"-"+
+      String(d.getDate()).padStart(2,'0'));
   }
-  return dates;
+  return arr;
 }
 
-let dailyData = JSON.parse(localStorage.getItem("dailySteps")) || {};
-const todayKey = getTodayKey();
-if (!dailyData[todayKey]) dailyData[todayKey] = 0;
+let dailyData=JSON.parse(localStorage.getItem("dailySteps"))||{};
+const todayKey=getTodayKey();
+if(!dailyData[todayKey]) dailyData[todayKey]=0;
 
-const resultDiv = document.getElementById("result");
-const analysisDiv = document.getElementById("analysis");
-const progressBar = document.getElementById("progressBar");
+const remainingDiv=document.getElementById("remaining");
 
-function updateUI() {
-  const todaySteps = dailyData[todayKey];
-  resultDiv.innerText = `今日の歩数：${todaySteps}歩`;
 
-  let percent = Math.min((todaySteps / DAILY_GOAL) * 100, 100);
-  progressBar.style.width = percent + "%";
-  progressBar.innerText = Math.floor(percent) + "%";
-  progressBar.style.background = percent >= 100 ? "#2196F3" : "#4CAF50";
-}
-
-const ctx = document.getElementById('stepChart').getContext('2d');
-const chart = new Chart(ctx, {
-  type: 'bar',
-  data: {
-    labels: [],
-    datasets: [{
-      label: '',
-      data: [],
-      borderWidth: 1
+// 🔵 ドーナツグラフ
+const donutCtx=document.getElementById("donutChart").getContext("2d");
+const donutChart=new Chart(donutCtx,{
+  type:"doughnut",
+  data:{
+    labels:["歩数","残り"],
+    datasets:[{
+      data:[0,DAILY_GOAL],
+      backgroundColor:["#4CAF50","#ddd"]
     }]
   },
-  options: {
-    responsive: true,
-    scales: { y: { beginAtZero: true } }
+  options:{
+    cutout:"70%",
+    plugins:{legend:{display:false}}
   }
 });
 
-function updateGraph() {
-  const weekDates = getThisWeekDates();
-  chart.data.labels = weekDates.map(d => d.slice(5));
+function updateDonut(){
+  const todaySteps=dailyData[todayKey];
+  const remaining=Math.max(DAILY_GOAL-todaySteps,0);
 
-  if (displayMode === "steps") {
-    chart.data.datasets[0].label = "今週の歩数（月〜日）";
-    chart.data.datasets[0].data =
-      weekDates.map(d => dailyData[d] || 0);
-  } else {
-    chart.data.datasets[0].label = "今週の消費カロリー（kcal）";
-    chart.data.datasets[0].data =
-      weekDates.map(d => (dailyData[d] || 0) * CALORIE_PER_STEP);
-  }
+  donutChart.data.datasets[0].data=[
+    Math.min(todaySteps,DAILY_GOAL),
+    remaining
+  ];
+  donutChart.update();
 
-  chart.update();
+  remainingDiv.innerHTML=
+    `今日：${todaySteps}歩<br>
+     目標まであと ${remaining} 歩`;
 }
 
-updateUI();
-updateGraph();
+updateDonut();
 
-document.getElementById("toggleBtn").onclick = function() {
-  if (displayMode === "steps") {
-    displayMode = "calories";
-    this.innerText = "👣 歩数表示に切替";
-  } else {
-    displayMode = "steps";
-    this.innerText = "🔥 カロリー表示に切替";
-  }
-  updateGraph();
-};
 
-document.getElementById("startBtn").onclick = async () => {
-  walking = true;
-  steps = 0;
-  magnitudes = [];
-  startTime = Date.now();
+// 📊 メイングラフ
+const mainCtx=document.getElementById("mainChart").getContext("2d");
+const mainChart=new Chart(mainCtx,{
+  type:"bar",
+  data:{labels:[],datasets:[{data:[],borderWidth:1}]},
+  options:{responsive:true,scales:{y:{beginAtZero:true}}}
+});
 
-  if (typeof DeviceMotionEvent !== 'undefined' &&
-      typeof DeviceMotionEvent.requestPermission === 'function') {
+function showWeekSteps(){
+  const week=getThisWeekDates();
+  mainChart.data.labels=week.map(d=>d.slice(5));
+  mainChart.data.datasets[0].label="今週の歩数";
+  mainChart.data.datasets[0].data=
+    week.map(d=>dailyData[d]||0);
+  mainChart.update();
+}
+
+function showCalories(){
+  const week=getThisWeekDates();
+  mainChart.data.labels=week.map(d=>d.slice(5));
+  mainChart.data.datasets[0].label="今週の消費カロリー(kcal)";
+  mainChart.data.datasets[0].data=
+    week.map(d=>(dailyData[d]||0)*CALORIE_PER_STEP);
+  mainChart.update();
+}
+
+showWeekSteps();
+
+document.getElementById("weekBtn").onclick=showWeekSteps;
+document.getElementById("calorieBtn").onclick=showCalories;
+
+
+// 🚶 歩数計測
+document.getElementById("startBtn").onclick=async()=>{
+  walking=true;
+  steps=0;
+  magnitudes=[];
+  startTime=Date.now();
+
+  if(typeof DeviceMotionEvent!=='undefined' &&
+     typeof DeviceMotionEvent.requestPermission==='function'){
     await DeviceMotionEvent.requestPermission();
   }
-
-  resultDiv.innerText = "計測中...";
-  analysisDiv.innerText = "";
 };
 
-document.getElementById("stopBtn").onclick = () => {
-  walking = false;
-  dailyData[todayKey] += steps;
-  localStorage.setItem("dailySteps", JSON.stringify(dailyData));
-  analyzeWalk();
-  steps = 0;
-  updateUI();
-  updateGraph();
+document.getElementById("stopBtn").onclick=()=>{
+  walking=false;
+  dailyData[todayKey]+=steps;
+  localStorage.setItem("dailySteps",
+    JSON.stringify(dailyData));
+  steps=0;
+  updateDonut();
+  showWeekSteps();
 };
 
-window.addEventListener("devicemotion", (event) => {
-  if (!walking) return;
-  const acc = event.accelerationIncludingGravity;
-  if (!acc) return;
-  const magnitude = Math.sqrt(acc.x*acc.x + acc.y*acc.y + acc.z*acc.z);
-  magnitudes.push(magnitude);
-  const now = Date.now();
-  if (magnitude > STEP_THRESHOLD && now - lastStepTime > STEP_INTERVAL) {
+window.addEventListener("devicemotion",(event)=>{
+  if(!walking)return;
+  const acc=event.accelerationIncludingGravity;
+  if(!acc)return;
+
+  const mag=Math.sqrt(acc.x*acc.x+
+                      acc.y*acc.y+
+                      acc.z*acc.z);
+  const now=Date.now();
+
+  if(mag>STEP_THRESHOLD &&
+     now-lastStepTime>STEP_INTERVAL){
     steps++;
-    lastStepTime = now;
+    lastStepTime=now;
   }
 });
-
-function analyzeWalk() {
-  const durationMin = (Date.now() - startTime) / 60000;
-  const cadence = durationMin > 0 ? Math.round(steps / durationMin) : 0;
-  let paceType = cadence < 90 ? "ゆっくり" :
-                 cadence < 120 ? "標準" : "速歩";
-
-  const avg = magnitudes.length ?
-    magnitudes.reduce((a,b)=>a+b,0) / magnitudes.length : 0;
-
-  const variance = magnitudes.length ?
-    magnitudes.reduce((a,b)=>a+(b-avg)**2,0) / magnitudes.length : 0;
-
-  let stability = variance < 5 ? "とても安定" :
-                  variance < 15 ? "安定" : "やや不安定";
-
-  analysisDiv.innerHTML =
-    `歩行テンポ：${cadence} 歩/分（${paceType}）<br>` +
-    `歩行安定性：${stability}`;
-}
 </script>
-
 </body>
 </html>
