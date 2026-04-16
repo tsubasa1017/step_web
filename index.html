@@ -1,190 +1,128 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
-<meta charset="UTF-8">
-<title>AI歩き方診断</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <title>AI歩き方診断 + グラフ</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: #f5f5f5;
+      margin: 0;
+      padding: 20px;
+    }
 
-<style>
-body{
-  text-align:center;
-  font-family:Arial, sans-serif;
-  background:linear-gradient(to right,#667eea,#764ba2);
-  color:white;
-  margin:0;
-  padding:20px;
-}
+    button {
+      font-size: 20px;
+      padding: 15px 30px;
+      margin: 10px;
+      border-radius: 12px;
+      border: none;
+      cursor: pointer;
+    }
 
-h1{margin-top:10px;}
+    #startBtn { background: #4CAF50; color: white; }
+    #stopBtn { background: #f44336; color: white; }
 
-button{
-  width:80%;
-  max-width:400px;
-  padding:20px;
-  font-size:22px;
-  font-weight:bold;
-  border:none;
-  border-radius:20px;
-  margin:15px;
-  cursor:pointer;
-}
+    #result {
+      font-size: 22px;
+      margin-top: 20px;
+    }
 
-#startBtn{background:green;color:white;}
-#resetBtn{background:orange;color:white;}
-
-.card{
-  background:rgba(255,255,255,0.15);
-  padding:15px;
-  border-radius:20px;
-  margin:15px auto;
-  max-width:500px;
-}
-
-.big{
-  font-size:28px;
-  font-weight:bold;
-}
-</style>
+    canvas {
+      margin-top: 30px;
+      background: white;
+      border-radius: 12px;
+      padding: 10px;
+    }
+  </style>
 </head>
-
 <body>
 
-<h1>🤖 AI歩き方診断</h1>
+  <h1>AI歩き方診断</h1>
 
-<div class="card">
-  <div class="big">歩数: <span id="step">0</span></div>
-</div>
+  <button id="startBtn">計測開始</button>
+  <button id="stopBtn">計測停止</button>
 
-<div class="card">
-  <div id="result" class="big">診断結果：まだデータ不足</div>
-  <div id="score"></div>
-</div>
+  <div id="result">結果がここに表示されます</div>
 
-<button id="startBtn" onclick="requestPermission()">診断開始</button>
-<button id="resetBtn" onclick="resetData()">リセット</button>
+  <canvas id="stepChart" width="400" height="200"></canvas>
 
-<p id="status"></p>
+  <script>
+    let steps = 0;
+    let walking = false;
+    let stepHistory = JSON.parse(localStorage.getItem("stepHistory")) || [];
 
-<script>
-let steps = 0;
-let lastStepTime = 0;
-let threshold = 15;
+    const resultDiv = document.getElementById("result");
 
-let stepIntervals = [];
-let accelerations = [];
-
-function requestPermission(){
-  document.getElementById("status").textContent="センサー確認中...";
-
-  if(typeof DeviceMotionEvent !== "undefined" &&
-     typeof DeviceMotionEvent.requestPermission === "function"){
-
-    DeviceMotionEvent.requestPermission()
-    .then(response=>{
-      if(response==="granted"){
-        startDetect();
-        document.getElementById("status").textContent="検出開始！歩いてみよう 👟";
-      }else{
-        document.getElementById("status").textContent="許可されませんでした";
+    const ctx = document.getElementById('stepChart').getContext('2d');
+    const chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: stepHistory.map((_, i) => i + 1),
+        datasets: [{
+          label: '歩数推移',
+          data: stepHistory,
+          borderWidth: 2,
+          tension: 0.3
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: {
+            beginAtZero: true
+          }
+        }
       }
     });
 
-  }else{
-    startDetect();
-    document.getElementById("status").textContent="検出開始！歩いてみよう 👟";
-  }
-}
+    document.getElementById("startBtn").onclick = () => {
+      walking = true;
+    };
 
-function startDetect(){
-  window.addEventListener("devicemotion",function(event){
+    document.getElementById("stopBtn").onclick = () => {
+      walking = false;
+      diagnose();
+      saveData();
+      updateGraph();
+    };
 
-    let acc=event.accelerationIncludingGravity;
-    if(!acc)return;
-
-    let total=Math.sqrt(
-      (acc.x||0)**2+
-      (acc.y||0)**2+
-      (acc.z||0)**2
-    );
-
-    let now=Date.now();
-
-    if(total>threshold && now-lastStepTime>500){
-
-      if(lastStepTime!==0){
-        stepIntervals.push(now-lastStepTime);
+    function simulateStep() {
+      if (walking) {
+        steps += Math.floor(Math.random() * 3); // 疑似歩数
       }
-
-      accelerations.push(total);
-
-      steps++;
-      lastStepTime=now;
-
-      document.getElementById("step").textContent=steps;
-
-      if(steps>=20){
-        diagnose();
-      }
+      requestAnimationFrame(simulateStep);
     }
-  });
-}
 
-function diagnose(){
+    function diagnose() {
+      let message = "";
+      if (steps < 50) {
+        message = "運動不足タイプ";
+      } else if (steps < 150) {
+        message = "標準的な歩き方";
+      } else {
+        message = "アスリートタイプ";
+      }
 
-  let avgInterval=average(stepIntervals);
-  let intervalStd=std(stepIntervals);
-  let avgAcc=average(accelerations);
+      resultDiv.innerText = `今回の歩数: ${steps}歩 → ${message}`;
+      stepHistory.push(steps);
+      steps = 0;
+    }
 
-  let result="";
-  let score=100;
+    function saveData() {
+      localStorage.setItem("stepHistory", JSON.stringify(stepHistory));
+    }
 
-  // 安定性評価
-  score -= intervalStd/10;
-  score -= (avgAcc-16)*2;
+    function updateGraph() {
+      chart.data.labels = stepHistory.map((_, i) => i + 1);
+      chart.data.datasets[0].data = stepHistory;
+      chart.update();
+    }
 
-  if(score>100)score=100;
-  if(score<0)score=0;
-
-  if(intervalStd<100 && avgAcc<18){
-    result="✨ 理想的で安定した歩き方";
-  }
-  else if(avgAcc>22){
-    result="⚠ 衝撃が強い歩き方（ドタドタ傾向）";
-  }
-  else if(intervalStd>200){
-    result="😵 リズム不安定（疲労の可能性）";
-  }
-  else{
-    result="🙂 標準的な歩き方";
-  }
-
-  document.getElementById("result").textContent="診断結果："+result;
-  document.getElementById("score").textContent="AIスコア："+Math.round(score)+" / 100";
-}
-
-function average(arr){
-  if(arr.length===0)return 0;
-  return arr.reduce((a,b)=>a+b,0)/arr.length;
-}
-
-function std(arr){
-  if(arr.length===0)return 0;
-  let avg=average(arr);
-  let variance=arr.reduce((a,b)=>a+(b-avg)**2,0)/arr.length;
-  return Math.sqrt(variance);
-}
-
-function resetData(){
-  steps=0;
-  stepIntervals=[];
-  accelerations=[];
-  lastStepTime=0;
-
-  document.getElementById("step").textContent=0;
-  document.getElementById("result").textContent="診断結果：まだデータ不足";
-  document.getElementById("score").textContent="";
-}
-</script>
+    simulateStep();
+  </script>
 
 </body>
 </html>
