@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>世界冒険歩数計</title>
+<title>世界冒険歩数計（センサー版）</title>
 
 <style>
 body {
@@ -21,15 +21,8 @@ button {
     cursor: pointer;
 }
 
-#startBtn {
-    background-color: green;
-    color: white;
-}
-
-#stopBtn {
-    background-color: red;
-    color: white;
-}
+#startBtn { background: green; color: white; }
+#resetBtn { background: orange; color: white; }
 
 #progressBar {
     width: 80%;
@@ -53,50 +46,77 @@ button {
 <h1>🌍 世界冒険歩数計</h1>
 
 <h2>歩数: <span id="step">0</span></h2>
-
 <h2 id="location">現在地：福井</h2>
 
 <div id="progressBar">
     <div id="progress"></div>
 </div>
 
-<button id="startBtn" onclick="start()">開始</button>
-<button id="stopBtn" onclick="stop()">停止</button>
+<button id="startBtn" onclick="requestPermission()">開始</button>
+<button id="resetBtn" onclick="resetSteps()">リセット</button>
+
+<p id="status"></p>
 
 <script>
 let steps = 0;
-let intervalId = null;
+let lastStepTime = 0;
+let threshold = 15;   // 揺れの強さ基準（調整可）
 
-function start() {
-    if (intervalId === null) {
-        intervalId = setInterval(() => {
-            steps++;
-            document.getElementById("step").textContent = steps;
-            updateLocation();
-            updateProgress();
-        }, 100);
+function requestPermission() {
+    document.getElementById("status").textContent = "センサー許可を確認中...";
+
+    if (typeof DeviceMotionEvent !== "undefined" &&
+        typeof DeviceMotionEvent.requestPermission === "function") {
+
+        DeviceMotionEvent.requestPermission()
+        .then(response => {
+            if (response === "granted") {
+                startDetect();
+                document.getElementById("status").textContent = "検出開始！歩いてみよう 👟";
+            } else {
+                document.getElementById("status").textContent = "許可されませんでした";
+            }
+        })
+        .catch(console.error);
+
+    } else {
+        startDetect();
+        document.getElementById("status").textContent = "検出開始！歩いてみよう 👟";
     }
 }
 
-function stop() {
-    clearInterval(intervalId);
-    intervalId = null;
+function startDetect() {
+    window.addEventListener("devicemotion", function(event) {
+        let acc = event.accelerationIncludingGravity;
+        if (!acc) return;
+
+        let total = Math.sqrt(
+            (acc.x || 0) * (acc.x || 0) +
+            (acc.y || 0) * (acc.y || 0) +
+            (acc.z || 0) * (acc.z || 0)
+        );
+
+        let now = Date.now();
+
+        if (total > threshold && now - lastStepTime > 500) {
+            steps++;
+            lastStepTime = now;
+
+            document.getElementById("step").textContent = steps;
+            updateLocation();
+            updateProgress();
+        }
+    });
 }
 
 function updateLocation() {
     let location = "福井";
 
-    if (steps >= 20000) {
-        location = "🌍 世界一周達成！🎉";
-    } else if (steps >= 10000) {
-        location = "🇺🇸 アメリカ";
-    } else if (steps >= 6000) {
-        location = "🇰🇷 韓国";
-    } else if (steps >= 3000) {
-        location = "大阪";
-    } else if (steps >= 1000) {
-        location = "東京";
-    }
+    if (steps >= 20000) location = "🌍 世界一周達成！🎉";
+    else if (steps >= 10000) location = "🇺🇸 アメリカ";
+    else if (steps >= 6000) location = "🇰🇷 韓国";
+    else if (steps >= 3000) location = "大阪";
+    else if (steps >= 1000) location = "東京";
 
     document.getElementById("location").textContent = "現在地：" + location;
 }
@@ -105,6 +125,13 @@ function updateProgress() {
     let percent = (steps / 20000) * 100;
     if (percent > 100) percent = 100;
     document.getElementById("progress").style.width = percent + "%";
+}
+
+function resetSteps() {
+    steps = 0;
+    document.getElementById("step").textContent = 0;
+    document.getElementById("location").textContent = "現在地：福井";
+    document.getElementById("progress").style.width = "0%";
 }
 </script>
 
