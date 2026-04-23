@@ -42,22 +42,29 @@ body{
   font-weight:bold;
 }
 
-/* ===== UI統一 ===== */
+/* ===== 完全統一UI ===== */
 button,select,input{
   width:100%;
-  padding:12px;
+  height:48px;              /* ←高さ完全統一 */
+  padding:0 12px;
   margin:5px 0;
   border:none;
   border-radius:10px;
   box-sizing:border-box;
   font-size:16px;
+  line-height:48px;         /* ←文字中央揃え */
+  appearance:none;          /* ←ブラウザ差を消す */
 }
 
 input{
   background:#f5f5f5;
 }
 
-button{color:white;}
+button{
+  color:white;
+  line-height:48px;
+}
+
 #startBtn{background:#4CAF50;}
 #stopBtn{background:#f44336;}
 #weekBtn{background:#2196F3;}
@@ -108,7 +115,7 @@ let data=JSON.parse(localStorage.getItem("steps"))||{};
 const today=new Date().toISOString().slice(0,10);
 if(!data[today]) data[today]=0;
 
-// ===== 入力保存 =====
+// 入力保存
 const weightInput = document.getElementById("weight");
 const heightInput = document.getElementById("height");
 
@@ -118,18 +125,15 @@ heightInput.value = localStorage.getItem("height") || "";
 weightInput.oninput=()=>localStorage.setItem("weight",weightInput.value);
 heightInput.oninput=()=>localStorage.setItem("height",heightInput.value);
 
-// ===== ドーナツ =====
+// ドーナツ
 const donut=new Chart(document.getElementById("donutChart"),{
  type:"doughnut",
- data:{datasets:[{
-   data:[0,GOAL],
-   backgroundColor:["#4CAF50","#ddd"]
- }]},
+ data:{datasets:[{data:[0,GOAL],backgroundColor:["#4CAF50","#ddd"]}]},
  options:{cutout:"70%",plugins:{legend:{display:false}}}
 });
 
 function updateDonut(){
- const total=data[today] + steps;
+ const total=data[today]+steps;
  const remain=Math.max(GOAL-total,0);
 
  donut.data.datasets[0].data=[Math.min(total,GOAL),remain];
@@ -139,32 +143,29 @@ function updateDonut(){
  document.getElementById("remaining").innerText="あと "+remain+" 歩";
 }
 
-// ===== カロリー =====
+// カロリー
 function updateTodayCal(){
- const weight = parseFloat(localStorage.getItem("weight")) || 60;
- const total = data[today] + steps;
- const cal = Math.round(total * weight * 0.0005);
+ const weight=parseFloat(localStorage.getItem("weight"))||60;
+ const total=data[today]+steps;
+ const cal=Math.round(total*weight*0.0005);
 
- document.getElementById("todayCal").innerText =
-   "消費カロリー: " + cal + " kcal";
+ document.getElementById("todayCal").innerText="消費カロリー: "+cal+" kcal";
 }
 
-// ===== 距離 =====
+// 距離
 function updateDistance(){
- const height = parseFloat(localStorage.getItem("height")) || 170;
- const stride = height * 0.45 / 100;
- const total = data[today] + steps;
- const dist = (total * stride) / 1000;
+ const height=parseFloat(localStorage.getItem("height"))||170;
+ const stride=height*0.45/100;
+ const total=data[today]+steps;
+ const dist=(total*stride)/1000;
 
- document.getElementById("distance").innerText =
-   "移動距離: " + dist.toFixed(2) + " km";
+ document.getElementById("distance").innerText="移動距離: "+dist.toFixed(2)+" km";
 }
 
-// ===== 月選択 =====
+// 月選択
 function initMonth(){
  const select=document.getElementById("monthSelect");
- const keys=Object.keys(data);
- const months=[...new Set(keys.map(k=>k.slice(0,7)))];
+ const months=[...new Set(Object.keys(data).map(k=>k.slice(0,7)))];
  months.sort().reverse();
 
  months.forEach(m=>{
@@ -175,7 +176,7 @@ function initMonth(){
  });
 }
 
-// ===== グラフ =====
+// グラフ
 const chart=new Chart(document.getElementById("chart"),{
  type:"bar",
  data:{labels:[],datasets:[{label:"歩数",data:[]}]}
@@ -194,22 +195,17 @@ function getWeek(){
 function showWeek(){
  const w=getWeek();
  chart.data.labels=w.map(d=>d.slice(5));
- chart.data.datasets[0].label="歩数";
  chart.data.datasets[0].data=w.map(d=>data[d]||0);
  chart.update();
 }
 
 function showCal(){
- const weight = parseFloat(localStorage.getItem("weight")) || 60;
+ const weight=parseFloat(localStorage.getItem("weight"))||60;
  const w=getWeek();
 
  chart.data.labels=w.map(d=>d.slice(5));
  chart.data.datasets[0].label="カロリー(kcal)";
- chart.data.datasets[0].data=w.map(d=>{
-   const steps = data[d] || 0;
-   return Math.round(steps * weight * 0.0005);
- });
-
+ chart.data.datasets[0].data=w.map(d=>Math.round((data[d]||0)*weight*0.0005));
  chart.update();
 }
 
@@ -225,12 +221,11 @@ function showMonth(){
  }
 
  chart.data.labels=labels;
- chart.data.datasets[0].label="月歩数";
  chart.data.datasets[0].data=vals;
  chart.update();
 }
 
-// ===== スタート =====
+// スタート
 document.getElementById("startBtn").onclick=async()=>{
  if(typeof DeviceMotionEvent!=='undefined' &&
     typeof DeviceMotionEvent.requestPermission==='function'){
@@ -242,7 +237,7 @@ document.getElementById("startBtn").onclick=async()=>{
  startTime=Date.now();
 };
 
-// ===== ストップ =====
+// ストップ
 document.getElementById("stopBtn").onclick=()=>{
  walking=false;
  data[today]+=steps;
@@ -252,10 +247,9 @@ document.getElementById("stopBtn").onclick=()=>{
  updateTodayCal();
  updateDistance();
  showWeek();
- analyze();
 };
 
-// ===== センサー =====
+// センサー
 window.addEventListener("devicemotion",(e)=>{
  if(!walking)return;
  const a=e.accelerationIncludingGravity;
@@ -271,20 +265,8 @@ window.addEventListener("devicemotion",(e)=>{
    updateDonut();
    updateTodayCal();
    updateDistance();
-   analyze();
  }
 });
-
-// ===== AI分析 =====
-function analyze(){
- const total=data[today]+steps;
- document.getElementById("analysis").innerText="今日の歩数は "+total+" 歩です。";
-}
-
-// ===== ボタン =====
-document.getElementById("weekBtn").onclick=showWeek;
-document.getElementById("calBtn").onclick=showCal;
-document.getElementById("monthBtn").onclick=showMonth;
 
 // 初期化
 initMonth();
