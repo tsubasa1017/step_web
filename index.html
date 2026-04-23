@@ -41,13 +41,22 @@ body{
   font-size:20px;
   font-weight:bold;
 }
+
+/* ===== UI統一 ===== */
 button,select,input{
   width:100%;
   padding:12px;
   margin:5px 0;
   border:none;
   border-radius:10px;
+  box-sizing:border-box;
+  font-size:16px;
 }
+
+input{
+  background:#f5f5f5;
+}
+
 button{color:white;}
 #startBtn{background:#4CAF50;}
 #stopBtn{background:#f44336;}
@@ -143,7 +152,7 @@ function updateTodayCal(){
 // ===== 距離 =====
 function updateDistance(){
  const height = parseFloat(localStorage.getItem("height")) || 170;
- const stride = height * 0.45 / 100; // m
+ const stride = height * 0.45 / 100;
  const total = data[today] + steps;
  const dist = (total * stride) / 1000;
 
