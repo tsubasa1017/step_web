@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI歩き方診断アプリ</title>
+<title>AI歩き方診断アプリ（AI強化版）</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
@@ -69,13 +69,14 @@ canvas{
 #remaining,#analysis,#monthInfo{
   margin-top:10px;
   font-size:16px;
+  text-align:left;
 }
 </style>
 </head>
 
 <body>
 
-<h2>🚶 AI歩き方診断</h2>
+<h2>🚶 AI歩き方診断（AI強化版）</h2>
 
 <div class="card">
   <div class="button-group">
@@ -95,7 +96,6 @@ canvas{
 </div>
 
 <div class="card">
-
   <div class="button-group">
     <button id="weekBtn">週の歩数</button>
     <button id="calorieBtn">消費カロリー</button>
@@ -106,7 +106,6 @@ canvas{
 
   <canvas id="mainChart"></canvas>
   <div id="monthInfo"></div>
-
 </div>
 
 <script>
@@ -147,7 +146,7 @@ function getWeek(){
   return arr;
 }
 
-// 月の日付
+// 月
 function getMonthDays(monthStr){
   const [year, month] = monthStr.split("-");
   const lastDay = new Date(year, month, 0).getDate();
@@ -166,13 +165,11 @@ let data=JSON.parse(localStorage.getItem("steps"))||{};
 const today=todayKey();
 if(!data[today]) data[today]=0;
 
-// 月選択自動生成🔥
+// 月選択
 function generateMonthOptions(){
   const select=document.getElementById("monthSelect");
   const keys=Object.keys(data);
-
   const months=[...new Set(keys.map(k=>k.slice(0,7)))];
-
   months.sort().reverse();
 
   months.forEach(m=>{
@@ -255,7 +252,7 @@ function showMonth(){
   `;
 }
 
-// AI分析
+// ===== AI強化 =====
 function analyzeAI(){
   const duration=(Date.now()-startTime)/60000;
   const cadence=duration>0?steps/duration:0;
@@ -288,16 +285,40 @@ function analyzeAI(){
     rhythmScore*0.2
   );
 
-  return {total,tempoScore,stabilityScore,rhythmScore};
+  return {total,tempoScore,stabilityScore,rhythmScore,cadence,variance};
+}
+
+function generateAdvice(r){
+  let type="", advice=[], comment="";
+
+  if(r.total>=85) type="🏃 アクティブ型";
+  else if(r.total>=70) type="🚶 バランス型";
+  else if(r.total>=50) type="🐢 ゆっくり型";
+  else type="⚠️ 不安定型";
+
+  if(r.cadence<90) advice.push("テンポを少し上げると効果UP");
+  if(r.cadence>120) advice.push("少しペースを落とすと安定");
+
+  if(r.variance>15) advice.push("姿勢を意識すると安定します");
+  if(r.variance<5) advice.push("非常に安定した歩き方です");
+
+  if(r.total>=80) comment="とても良い歩行です！";
+  else if(r.total>=60) comment="良いですが改善の余地あり";
+  else comment="改善で大きく伸びます！";
+
+  return {type, advice, comment};
 }
 
 function showAI(){
   const r=analyzeAI();
-  document.getElementById("analysis").innerHTML=
-    `🔥 AIスコア：${r.total}点<br>
-     テンポ：${r.tempoScore}<br>
-     安定性：${r.stabilityScore}<br>
-     リズム：${r.rhythmScore}`;
+  const ai=generateAdvice(r);
+
+  document.getElementById("analysis").innerHTML=`
+    🔥 AIスコア：${r.total}点<br><br>
+    🧬 タイプ：${ai.type}<br><br>
+    💬 評価：${ai.comment}<br><br>
+    🛠 改善：<br>${ai.advice.map(a=>"・"+a).join("<br>")}
+  `;
 }
 
 // ボタン
