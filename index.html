@@ -28,8 +28,6 @@ body{
   margin:10px auto;
   max-width:420px;
 }
-
-/* ドーナツ */
 .donut-wrap{
   position:relative;
   width:200px;
@@ -43,7 +41,6 @@ body{
   font-size:20px;
   font-weight:bold;
 }
-
 button,select{
   width:100%;
   padding:12px;
@@ -112,7 +109,7 @@ const donut=new Chart(document.getElementById("donutChart"),{
 });
 
 function updateDonut(){
- const total=data[today];
+ const total=data[today] + steps; // ←リアルタイム反映
  const remain=Math.max(GOAL-total,0);
 
  donut.data.datasets[0].data=[Math.min(total,GOAL),remain];
@@ -219,18 +216,49 @@ window.addEventListener("devicemotion",(e)=>{
  if(mag>12 && now-lastStep>300){
    steps++;
    lastStep=now;
+
+   updateDonut(); // ←追加
+   analyze();     // ←追加
  }
 });
 
-// ===== AI =====
+// ===== AI分析（強化版） =====
 function analyze(){
- const time=(Date.now()-startTime)/60000;
- const cadence=steps/time;
+ const todaySteps = data[today] + steps;
+
+ // 前日
+ const keys = Object.keys(data).sort();
+ const yesterday = keys.length > 1 ? data[keys[keys.length-2]] : todaySteps;
+
+ // 週間平均
+ const week = getWeek();
+ const weeklyAvg = week.reduce((s,d)=>s+(data[d]||0),0)/week.length;
+
+ // ペース
+ const time = (Date.now()-startTime)/60000;
+ const cadence = steps/(time||1);
 
  let msg="";
- if(cadence>120) msg="速い！";
- else if(cadence>90) msg="良いペース";
- else msg="ゆっくり";
+
+ // ペース
+ if(cadence>120) msg+="かなり速いペースで歩けています。";
+ else if(cadence>90) msg+="良いペースで歩けています。";
+ else msg+="ややゆっくりなペースです。";
+
+ // 前日比較
+ if(todaySteps>yesterday) msg+=" 昨日より活動量が増えています。";
+ else if(todaySteps<yesterday) msg+=" 昨日より活動量が減少しています。";
+ else msg+=" 昨日と同程度です。";
+
+ // 平均比較
+ if(todaySteps>weeklyAvg) msg+=" 今週平均を上回っています。";
+ else msg+=" 今週平均を下回っています。";
+
+ // 目標
+ const rate=todaySteps/GOAL;
+ if(rate>=1) msg+=" 目標達成です！素晴らしいです。";
+ else if(rate>=0.7) msg+=` 目標まであと${GOAL-todaySteps}歩です。`;
+ else msg+=" もう少し歩くとさらに良くなります。";
 
  document.getElementById("analysis").innerText=msg;
 }
