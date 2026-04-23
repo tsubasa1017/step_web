@@ -63,6 +63,7 @@ button{color:white;}
 
 <div class="card">
 <input type="number" id="weight" placeholder="体重(kg)">
+<input type="number" id="height" placeholder="身長(cm)">
 <button id="startBtn">計測開始</button>
 <button id="stopBtn">計測停止</button>
 </div>
@@ -77,6 +78,7 @@ button{color:white;}
 
 <p id="remaining"></p>
 <p id="todayCal"></p>
+<p id="distance"></p>
 <p id="analysis"></p>
 </div>
 
@@ -97,13 +99,15 @@ let data=JSON.parse(localStorage.getItem("steps"))||{};
 const today=new Date().toISOString().slice(0,10);
 if(!data[today]) data[today]=0;
 
-// ===== 体重保存 =====
+// ===== 入力保存 =====
 const weightInput = document.getElementById("weight");
-weightInput.value = localStorage.getItem("weight") || "";
+const heightInput = document.getElementById("height");
 
-weightInput.addEventListener("input", () => {
-  localStorage.setItem("weight", weightInput.value);
-});
+weightInput.value = localStorage.getItem("weight") || "";
+heightInput.value = localStorage.getItem("height") || "";
+
+weightInput.oninput=()=>localStorage.setItem("weight",weightInput.value);
+heightInput.oninput=()=>localStorage.setItem("height",heightInput.value);
 
 // ===== ドーナツ =====
 const donut=new Chart(document.getElementById("donutChart"),{
@@ -112,10 +116,7 @@ const donut=new Chart(document.getElementById("donutChart"),{
    data:[0,GOAL],
    backgroundColor:["#4CAF50","#ddd"]
  }]},
- options:{
-   cutout:"70%",
-   plugins:{legend:{display:false}}
- }
+ options:{cutout:"70%",plugins:{legend:{display:false}}}
 });
 
 function updateDonut(){
@@ -137,6 +138,17 @@ function updateTodayCal(){
 
  document.getElementById("todayCal").innerText =
    "消費カロリー: " + cal + " kcal";
+}
+
+// ===== 距離 =====
+function updateDistance(){
+ const height = parseFloat(localStorage.getItem("height")) || 170;
+ const stride = height * 0.45 / 100; // m
+ const total = data[today] + steps;
+ const dist = (total * stride) / 1000;
+
+ document.getElementById("distance").innerText =
+   "移動距離: " + dist.toFixed(2) + " km";
 }
 
 // ===== 月選択 =====
@@ -209,7 +221,7 @@ function showMonth(){
  chart.update();
 }
 
-// ===== iPhone対応 =====
+// ===== スタート =====
 document.getElementById("startBtn").onclick=async()=>{
  if(typeof DeviceMotionEvent!=='undefined' &&
     typeof DeviceMotionEvent.requestPermission==='function'){
@@ -221,12 +233,15 @@ document.getElementById("startBtn").onclick=async()=>{
  startTime=Date.now();
 };
 
+// ===== ストップ =====
 document.getElementById("stopBtn").onclick=()=>{
  walking=false;
  data[today]+=steps;
  localStorage.setItem("steps",JSON.stringify(data));
+
  updateDonut();
  updateTodayCal();
+ updateDistance();
  showWeek();
  analyze();
 };
@@ -246,42 +261,15 @@ window.addEventListener("devicemotion",(e)=>{
 
    updateDonut();
    updateTodayCal();
+   updateDistance();
    analyze();
  }
 });
 
 // ===== AI分析 =====
 function analyze(){
- const todaySteps = data[today] + steps;
-
- const keys = Object.keys(data).sort();
- const yesterday = keys.length > 1 ? data[keys[keys.length-2]] : todaySteps;
-
- const week = getWeek();
- const weeklyAvg = week.reduce((s,d)=>s+(data[d]||0),0)/week.length;
-
- const time = (Date.now()-startTime)/60000;
- const cadence = steps/(time||1);
-
- let msg="";
-
- if(cadence>120) msg+="かなり速いペースで歩けています。";
- else if(cadence>90) msg+="良いペースで歩けています。";
- else msg+="ややゆっくりなペースです。";
-
- if(todaySteps>yesterday) msg+=" 昨日より活動量が増えています。";
- else if(todaySteps<yesterday) msg+=" 昨日より活動量が減少しています。";
- else msg+=" 昨日と同程度です。";
-
- if(todaySteps>weeklyAvg) msg+=" 今週平均を上回っています。";
- else msg+=" 今週平均を下回っています。";
-
- const rate=todaySteps/GOAL;
- if(rate>=1) msg+=" 目標達成です！";
- else if(rate>=0.7) msg+=` 目標まであと${GOAL-todaySteps}歩です。`;
- else msg+=" もう少し歩くと良くなります。";
-
- document.getElementById("analysis").innerText=msg;
+ const total=data[today]+steps;
+ document.getElementById("analysis").innerText="今日の歩数は "+total+" 歩です。";
 }
 
 // ===== ボタン =====
@@ -293,6 +281,7 @@ document.getElementById("monthBtn").onclick=showMonth;
 initMonth();
 updateDonut();
 updateTodayCal();
+updateDistance();
 showWeek();
 </script>
 
