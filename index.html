@@ -2,112 +2,149 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>AI歩き方診断 完成版</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>歩数アプリ（スマホ最適化版）</title>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
 body{
   font-family: Arial, sans-serif;
-  text-align:center;
   background:#f5f5f5;
   margin:0;
-  padding:20px;
+  padding:10px;
+  text-align:center;
+}
+
+/* セクションカード */
+.card{
+  background:white;
+  border-radius:16px;
+  padding:15px;
+  margin:10px auto;
+  max-width:420px;
+  box-shadow:0 2px 8px rgba(0,0,0,0.1);
+}
+
+/* ボタン */
+.button-group{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
 }
 
 button{
-  font-size:16px;
-  padding:10px 20px;
-  margin:5px;
+  width:100%;
+  font-size:18px;
+  padding:14px;
   border:none;
-  border-radius:10px;
-  cursor:pointer;
+  border-radius:12px;
+  color:white;
 }
 
-#startBtn{background:#4CAF50;color:white;}
-#stopBtn{background:#f44336;color:white;}
-#weekBtn{background:#2196F3;color:white;}
-#calorieBtn{background:#ff9800;color:white;}
+#startBtn{background:#4CAF50;}
+#stopBtn{background:#f44336;}
+#weekBtn{background:#2196F3;}
+#calorieBtn{background:#ff9800;}
 
+/* ドーナツ中央テキスト */
+.donut-wrapper{
+  position:relative;
+  width:220px;
+  margin:0 auto;
+}
+
+.center-text{
+  position:absolute;
+  top:50%;
+  left:50%;
+  transform:translate(-50%,-50%);
+  font-size:18px;
+  font-weight:bold;
+}
+
+/* グラフ */
 canvas{
-  background:white;
-  border-radius:12px;
-  padding:10px;
-  margin-top:20px;
+  width:100% !important;
+  height:250px !important;
 }
 
 #remaining{
-  font-size:20px;
   margin-top:10px;
-  font-weight:bold;
+  font-size:18px;
 }
 </style>
 </head>
+
 <body>
 
-<h1>AI歩き方診断</h1>
+<h2>🚶 歩数アプリ</h2>
 
-<button id="startBtn">計測開始</button>
-<button id="stopBtn">計測停止</button>
+<div class="card">
+  <div class="button-group">
+    <button id="startBtn">計測開始</button>
+    <button id="stopBtn">計測停止</button>
+  </div>
+</div>
 
-<h2>🏠 今日の進捗</h2>
-<canvas id="donutChart" width="250" height="250"></canvas>
-<div id="remaining"></div>
+<div class="card">
+  <h3>今日の進捗</h3>
 
-<hr>
+  <div class="donut-wrapper">
+    <canvas id="donutChart"></canvas>
+    <div class="center-text" id="centerText">0歩</div>
+  </div>
 
-<button id="weekBtn">週の歩数</button>
-<button id="calorieBtn">消費カロリー</button>
+  <div id="remaining"></div>
+</div>
 
-<canvas id="mainChart" width="400" height="200"></canvas>
+<div class="card">
+  <div class="button-group">
+    <button id="weekBtn">週の歩数</button>
+    <button id="calorieBtn">消費カロリー</button>
+  </div>
+
+  <canvas id="mainChart"></canvas>
+</div>
 
 <script>
 const DAILY_GOAL = 9000;
-const CALORIE_PER_STEP = 0.04;
+const CAL_PER_STEP = 0.04;
 
 let steps = 0;
 let walking = false;
 let lastStepTime = 0;
-let startTime = 0;
-let magnitudes = [];
 
 const STEP_THRESHOLD = 12;
 const STEP_INTERVAL = 300;
 
-function getTodayKey(){
-  const t=new Date();
-  return t.getFullYear()+"-"+
-  String(t.getMonth()+1).padStart(2,'0')+"-"+
-  String(t.getDate()).padStart(2,'0');
+function todayKey(){
+  const d=new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,'0')+"-"+String(d.getDate()).padStart(2,'0');
 }
 
-function getThisWeekDates(){
-  const today=new Date();
-  const day=today.getDay();
+function getWeek(){
+  const t=new Date();
+  const day=t.getDay();
   const diff=day===0?-6:1-day;
-  const monday=new Date(today);
-  monday.setDate(today.getDate()+diff);
+  const mon=new Date(t);
+  mon.setDate(t.getDate()+diff);
 
   let arr=[];
   for(let i=0;i<7;i++){
-    const d=new Date(monday);
-    d.setDate(monday.getDate()+i);
-    arr.push(d.getFullYear()+"-"+
-      String(d.getMonth()+1).padStart(2,'0')+"-"+
-      String(d.getDate()).padStart(2,'0'));
+    const d=new Date(mon);
+    d.setDate(mon.getDate()+i);
+    arr.push(d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,'0')+"-"+String(d.getDate()).padStart(2,'0'));
   }
   return arr;
 }
 
-let dailyData=JSON.parse(localStorage.getItem("dailySteps"))||{};
-const todayKey=getTodayKey();
-if(!dailyData[todayKey]) dailyData[todayKey]=0;
+let data=JSON.parse(localStorage.getItem("steps"))||{};
+const today=todayKey();
+if(!data[today]) data[today]=0;
 
-const remainingDiv=document.getElementById("remaining");
-
-
-// 🔵 ドーナツグラフ
-const donutCtx=document.getElementById("donutChart").getContext("2d");
-const donutChart=new Chart(donutCtx,{
+// ドーナツ
+const donut=new Chart(document.getElementById("donutChart"),{
   type:"doughnut",
   data:{
     labels:["歩数","残り"],
@@ -123,61 +160,50 @@ const donutChart=new Chart(donutCtx,{
 });
 
 function updateDonut(){
-  const todaySteps=dailyData[todayKey];
-  const remaining=Math.max(DAILY_GOAL-todaySteps,0);
+  const s=data[today];
+  const rem=Math.max(DAILY_GOAL-s,0);
 
-  donutChart.data.datasets[0].data=[
-    Math.min(todaySteps,DAILY_GOAL),
-    remaining
-  ];
-  donutChart.update();
+  donut.data.datasets[0].data=[Math.min(s,DAILY_GOAL),rem];
+  donut.update();
 
-  remainingDiv.innerHTML=
-    `今日：${todaySteps}歩<br>
-     目標まであと ${remaining} 歩`;
+  document.getElementById("centerText").innerText=s+"歩";
+  document.getElementById("remaining").innerHTML=
+    `あと ${rem} 歩`;
 }
 
-updateDonut();
-
-
-// 📊 メイングラフ
-const mainCtx=document.getElementById("mainChart").getContext("2d");
-const mainChart=new Chart(mainCtx,{
+// メイングラフ
+const main=new Chart(document.getElementById("mainChart"),{
   type:"bar",
-  data:{labels:[],datasets:[{data:[],borderWidth:1}]},
-  options:{responsive:true,scales:{y:{beginAtZero:true}}}
+  data:{labels:[],datasets:[{data:[]}]},
+  options:{scales:{y:{beginAtZero:true}}}
 });
 
-function showWeekSteps(){
-  const week=getThisWeekDates();
-  mainChart.data.labels=week.map(d=>d.slice(5));
-  mainChart.data.datasets[0].label="今週の歩数";
-  mainChart.data.datasets[0].data=
-    week.map(d=>dailyData[d]||0);
-  mainChart.update();
+function showSteps(){
+  const w=getWeek();
+  main.data.labels=w.map(d=>d.slice(5));
+  main.data.datasets[0].label="歩数";
+  main.data.datasets[0].data=w.map(d=>data[d]||0);
+  main.update();
 }
 
 function showCalories(){
-  const week=getThisWeekDates();
-  mainChart.data.labels=week.map(d=>d.slice(5));
-  mainChart.data.datasets[0].label="今週の消費カロリー(kcal)";
-  mainChart.data.datasets[0].data=
-    week.map(d=>(dailyData[d]||0)*CALORIE_PER_STEP);
-  mainChart.update();
+  const w=getWeek();
+  main.data.labels=w.map(d=>d.slice(5));
+  main.data.datasets[0].label="カロリー";
+  main.data.datasets[0].data=w.map(d=>(data[d]||0)*CAL_PER_STEP);
+  main.update();
 }
 
-showWeekSteps();
+showSteps();
+updateDonut();
 
-document.getElementById("weekBtn").onclick=showWeekSteps;
+// ボタン
+document.getElementById("weekBtn").onclick=showSteps;
 document.getElementById("calorieBtn").onclick=showCalories;
 
-
-// 🚶 歩数計測
 document.getElementById("startBtn").onclick=async()=>{
   walking=true;
   steps=0;
-  magnitudes=[];
-  startTime=Date.now();
 
   if(typeof DeviceMotionEvent!=='undefined' &&
      typeof DeviceMotionEvent.requestPermission==='function'){
@@ -187,30 +213,26 @@ document.getElementById("startBtn").onclick=async()=>{
 
 document.getElementById("stopBtn").onclick=()=>{
   walking=false;
-  dailyData[todayKey]+=steps;
-  localStorage.setItem("dailySteps",
-    JSON.stringify(dailyData));
-  steps=0;
+  data[today]+=steps;
+  localStorage.setItem("steps",JSON.stringify(data));
   updateDonut();
-  showWeekSteps();
+  showSteps();
 };
 
-window.addEventListener("devicemotion",(event)=>{
+window.addEventListener("devicemotion",(e)=>{
   if(!walking)return;
-  const acc=event.accelerationIncludingGravity;
-  if(!acc)return;
+  const a=e.accelerationIncludingGravity;
+  if(!a)return;
 
-  const mag=Math.sqrt(acc.x*acc.x+
-                      acc.y*acc.y+
-                      acc.z*acc.z);
+  const mag=Math.sqrt(a.x*a.x+a.y*a.y+a.z*a.z);
   const now=Date.now();
 
-  if(mag>STEP_THRESHOLD &&
-     now-lastStepTime>STEP_INTERVAL){
+  if(mag>STEP_THRESHOLD && now-lastStepTime>STEP_INTERVAL){
     steps++;
     lastStepTime=now;
   }
 });
 </script>
+
 </body>
 </html>
