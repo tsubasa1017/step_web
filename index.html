@@ -7,8 +7,6 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
-
-/* ===== 背景（ここが最重要） ===== */
 body{
   margin:0;
   padding:10px;
@@ -18,7 +16,6 @@ body{
   background: linear-gradient(-45deg, #4facfe, #00f2fe, #43e97b, #38f9d7);
   background-size: 400% 400%;
   animation: bgMove 10s ease infinite;
-
   color:#333;
 }
 
@@ -28,7 +25,6 @@ body{
   100%{background-position:0% 50%;}
 }
 
-/* ===== カード ===== */
 .card{
   background: rgba(255,255,255,0.9);
   border-radius:18px;
@@ -38,28 +34,20 @@ body{
   box-shadow:0 6px 20px rgba(0,0,0,0.2);
 }
 
-/* ===== ボタン ===== */
-button, select{
+button{
   width:100%;
   font-size:16px;
   padding:12px;
   border:none;
   border-radius:12px;
   margin-top:6px;
-}
-
-button{
   color:white;
   font-weight:bold;
 }
 
 #startBtn{background:#4CAF50;}
 #stopBtn{background:#f44336;}
-#weekBtn{background:#2196F3;}
-#calorieBtn{background:#ff9800;}
-#monthBtn{background:#9c27b0;}
 
-/* ===== ドーナツ ===== */
 .donut-wrapper{
   position:relative;
   width:220px;
@@ -75,24 +63,21 @@ button{
   font-weight:bold;
 }
 
-/* ===== グラフ ===== */
 canvas{
   width:100% !important;
   height:250px !important;
 }
 
-#remaining,#analysis,#monthInfo{
+#result{
   margin-top:10px;
-  font-size:16px;
-  text-align:left;
+  font-size:18px;
 }
-
 </style>
 </head>
 
 <body>
 
-<h2 style="color:white;">🚶 AI歩き方診断</h2>
+<h2 style="color:white;">🚶 歩数計</h2>
 
 <div class="card">
   <button id="startBtn">計測開始</button>
@@ -100,179 +85,87 @@ canvas{
 </div>
 
 <div class="card">
-  <h3>今日の進捗</h3>
   <div class="donut-wrapper">
     <canvas id="donutChart"></canvas>
     <div class="center-text" id="centerText">0歩</div>
   </div>
-  <div id="remaining"></div>
-  <div id="analysis"></div>
-</div>
-
-<div class="card">
-  <button id="weekBtn">週の歩数</button>
-  <button id="calorieBtn">消費カロリー</button>
-
-  <select id="monthSelect"></select>
-  <button id="monthBtn">📅 月表示</button>
-
-  <canvas id="mainChart"></canvas>
-  <div id="monthInfo"></div>
+  <div id="result">歩数：0</div>
 </div>
 
 <script>
-const DAILY_GOAL = 9000;
-const CAL_PER_STEP = 0.04;
+let steps = 0;
+let walking = false;
+let lastStepTime = 0;
 
-let steps=0, walking=false, lastStepTime=0, startTime=0;
-let magnitudes=[], stepTimes=[];
-
-const STEP_THRESHOLD=12;
-const STEP_INTERVAL=300;
-
-// ===== 日付 =====
-function todayKey(){
-  const d=new Date();
-  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,'0')+"-"+String(d.getDate()).padStart(2,'0');
-}
-
-function getWeek(){
-  const t=new Date();
-  const day=t.getDay();
-  const diff=day===0?-6:1-day;
-  const mon=new Date(t);
-  mon.setDate(t.getDate()+diff);
-
-  let arr=[];
-  for(let i=0;i<7;i++){
-    const d=new Date(mon);
-    d.setDate(mon.getDate()+i);
-    arr.push(d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,'0')+"-"+String(d.getDate()).padStart(2,'0'));
-  }
-  return arr;
-}
-
-function getMonthDays(m){
-  const [y,mo]=m.split("-");
-  const last=new Date(y,mo,0).getDate();
-  let arr=[];
-  for(let i=1;i<=last;i++){
-    arr.push(y+"-"+String(mo).padStart(2,'0')+"-"+String(i).padStart(2,'0'));
-  }
-  return arr;
-}
-
-// ===== データ =====
-let data=JSON.parse(localStorage.getItem("steps"))||{};
-const today=todayKey();
-if(!data[today]) data[today]=0;
-
-// 月選択
-function generateMonthOptions(){
-  const select=document.getElementById("monthSelect");
-  const keys=Object.keys(data);
-  const months=[...new Set(keys.map(k=>k.slice(0,7)))];
-  months.sort().reverse();
-
-  months.forEach(m=>{
-    const op=document.createElement("option");
-    op.value=m;
-    op.textContent=m.replace("-","年")+"月";
-    select.appendChild(op);
-  });
-}
+const STEP_THRESHOLD = 12;
+const STEP_INTERVAL = 300;
 
 // ===== ドーナツ =====
-const donut=new Chart(document.getElementById("donutChart"),{
-  type:"doughnut",
-  data:{datasets:[{data:[0,DAILY_GOAL],backgroundColor:["#4CAF50","#ddd"]}]},
-  options:{cutout:"70%",plugins:{legend:{display:false}}}
-});
-
-function updateDonut(){
-  const s=data[today];
-  const rem=Math.max(DAILY_GOAL-s,0);
-
-  donut.data.datasets[0].data=[Math.min(s,DAILY_GOAL),rem];
-  donut.update();
-
-  document.getElementById("centerText").innerText=s+"歩";
-  document.getElementById("remaining").innerHTML=`あと ${rem} 歩`;
-}
-
-// ===== グラフ =====
-const main=new Chart(document.getElementById("mainChart"),{
-  type:"bar",
-  data:{labels:[],datasets:[{data:[]}]},
-  options:{scales:{y:{beginAtZero:true}}}
-});
-
-function showSteps(){
-  const w=getWeek();
-  main.data.labels=w.map(d=>d.slice(5));
-  main.data.datasets[0].label="歩数";
-  main.data.datasets[0].data=w.map(d=>data[d]||0);
-  main.update();
-}
-
-function showCalories(){
-  const w=getWeek();
-  main.data.labels=w.map(d=>d.slice(5));
-  main.data.datasets[0].label="カロリー";
-  main.data.datasets[0].data=w.map(d=>(data[d]||0)*CAL_PER_STEP);
-  main.update();
-}
-
-function showMonth(){
-  const m=document.getElementById("monthSelect").value;
-  const days=getMonthDays(m);
-  const v=days.map(d=>data[d]||0);
-
-  main.data.labels=days.map(d=>d.slice(8));
-  main.data.datasets[0].label=m+" の歩数";
-  main.data.datasets[0].data=v;
-  main.update();
-}
-
-// ===== 操作 =====
-document.getElementById("weekBtn").onclick=showSteps;
-document.getElementById("calorieBtn").onclick=showCalories;
-document.getElementById("monthBtn").onclick=showMonth;
-
-document.getElementById("startBtn").onclick=()=>{
-  walking=true;
-  steps=0;
-  startTime=Date.now();
-};
-
-document.getElementById("stopBtn").onclick=()=>{
-  walking=false;
-  data[today]+=steps;
-  localStorage.setItem("steps",JSON.stringify(data));
-  updateDonut();
-  showSteps();
-};
-
-// センサー
-window.addEventListener("devicemotion",(e)=>{
-  if(!walking)return;
-  const a=e.accelerationIncludingGravity;
-  if(!a)return;
-
-  const mag=Math.sqrt(a.x*a.x+a.y*a.y+a.z*a.z);
-
-  const now=Date.now();
-  if(mag>STEP_THRESHOLD && now-lastStepTime>STEP_INTERVAL){
-    steps++;
-    lastStepTime=now;
+const donut = new Chart(document.getElementById("donutChart"), {
+  type: "doughnut",
+  data: {
+    datasets: [{
+      data: [0, 9000],
+      backgroundColor: ["#4CAF50", "#ddd"]
+    }]
+  },
+  options: {
+    cutout: "70%",
+    plugins: { legend: { display: false } }
   }
 });
 
-// 初期化
-generateMonthOptions();
-updateDonut();
-showSteps();
+function updateUI(){
+  document.getElementById("centerText").innerText = steps + "歩";
+  document.getElementById("result").innerText = "歩数：" + steps;
 
+  donut.data.datasets[0].data = [steps, Math.max(9000 - steps, 0)];
+  donut.update();
+}
+
+// ===== 計測開始（iPhone対応） =====
+document.getElementById("startBtn").onclick = async () => {
+
+  // iPhone用 許可
+  if (typeof DeviceMotionEvent !== 'undefined' &&
+      typeof DeviceMotionEvent.requestPermission === 'function') {
+
+    const permission = await DeviceMotionEvent.requestPermission();
+
+    if (permission !== 'granted') {
+      alert("センサーの許可が必要です");
+      return;
+    }
+  }
+
+  walking = true;
+  steps = 0;
+
+  alert("計測スタート！");
+};
+
+// ===== 停止 =====
+document.getElementById("stopBtn").onclick = () => {
+  walking = false;
+  alert("停止しました");
+};
+
+// ===== センサー =====
+window.addEventListener("devicemotion", (event) => {
+  if (!walking) return;
+
+  const acc = event.accelerationIncludingGravity;
+  if (!acc) return;
+
+  const magnitude = Math.sqrt(acc.x*acc.x + acc.y*acc.y + acc.z*acc.z);
+  const now = Date.now();
+
+  if (magnitude > STEP_THRESHOLD && now - lastStepTime > STEP_INTERVAL) {
+    steps++;
+    lastStepTime = now;
+    updateUI();
+  }
+});
 </script>
 
 </body>
