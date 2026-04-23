@@ -43,6 +43,7 @@ button{
 #stopBtn{background:#f44336;}
 #weekBtn{background:#2196F3;}
 #calorieBtn{background:#ff9800;}
+#monthBtn{background:#9c27b0;}
 
 .donut-wrapper{
   position:relative;
@@ -69,7 +70,7 @@ canvas{
   font-size:18px;
 }
 
-#analysis{
+#analysis, #monthInfo{
   font-size:16px;
   margin-top:10px;
 }
@@ -89,12 +90,10 @@ canvas{
 
 <div class="card">
   <h3>今日の進捗</h3>
-
   <div class="donut-wrapper">
     <canvas id="donutChart"></canvas>
     <div class="center-text" id="centerText">0歩</div>
   </div>
-
   <div id="remaining"></div>
   <div id="analysis"></div>
 </div>
@@ -103,9 +102,11 @@ canvas{
   <div class="button-group">
     <button id="weekBtn">週の歩数</button>
     <button id="calorieBtn">消費カロリー</button>
+    <button id="monthBtn">📅 月間グラフ</button>
   </div>
 
   <canvas id="mainChart"></canvas>
+  <div id="monthInfo"></div>
 </div>
 
 <script>
@@ -141,6 +142,17 @@ function getWeek(){
   for(let i=0;i<7;i++){
     const d=new Date(mon);
     d.setDate(mon.getDate()+i);
+    arr.push(d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,'0')+"-"+String(d.getDate()).padStart(2,'0'));
+  }
+  return arr;
+}
+
+// 30日
+function getLast30Days(){
+  let arr=[];
+  for(let i=29;i>=0;i--){
+    const d=new Date();
+    d.setDate(d.getDate()-i);
     arr.push(d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,'0')+"-"+String(d.getDate()).padStart(2,'0'));
   }
   return arr;
@@ -183,20 +195,60 @@ const main=new Chart(document.getElementById("mainChart"),{
   options:{scales:{y:{beginAtZero:true}}}
 });
 
+// 週
 function showSteps(){
   const w=getWeek();
   main.data.labels=w.map(d=>d.slice(5));
   main.data.datasets[0].label="歩数";
   main.data.datasets[0].data=w.map(d=>data[d]||0);
   main.update();
+  document.getElementById("monthInfo").innerHTML="";
 }
 
+// カロリー
 function showCalories(){
   const w=getWeek();
   main.data.labels=w.map(d=>d.slice(5));
   main.data.datasets[0].label="カロリー";
   main.data.datasets[0].data=w.map(d=>(data[d]||0)*CAL_PER_STEP);
   main.update();
+  document.getElementById("monthInfo").innerHTML="";
+}
+
+// 月間＋分析
+function showMonth(){
+  const days=getLast30Days();
+  const values=days.map(d=>data[d]||0);
+
+  main.data.labels=days.map(d=>d.slice(5));
+  main.data.datasets[0].label="過去30日の歩数";
+  main.data.datasets[0].data=values;
+  main.update();
+
+  // 分析
+  const sum=values.reduce((a,b)=>a+b,0);
+  const avg=Math.round(sum/values.length);
+
+  const max=Math.max(...values);
+  const min=Math.min(...values);
+
+  const maxDay=days[values.indexOf(max)].slice(5);
+  const minDay=days[values.indexOf(min)].slice(5);
+
+  // 傾向（前半と後半）
+  const first=values.slice(0,15).reduce((a,b)=>a+b,0)/15;
+  const last=values.slice(15).reduce((a,b)=>a+b,0)/15;
+
+  let trend="→ 横ばい";
+  if(last>first) trend="📈 増加傾向";
+  if(last<first) trend="📉 減少傾向";
+
+  document.getElementById("monthInfo").innerHTML=`
+    月平均：${avg}歩<br>
+    最大：${max}歩（${maxDay}）<br>
+    最小：${min}歩（${minDay}）<br>
+    傾向：${trend}
+  `;
 }
 
 // AI分析
@@ -247,7 +299,9 @@ function showAI(){
 // ボタン
 document.getElementById("weekBtn").onclick=showSteps;
 document.getElementById("calorieBtn").onclick=showCalories;
+document.getElementById("monthBtn").onclick=showMonth;
 
+// 計測
 document.getElementById("startBtn").onclick=async()=>{
   walking=true;
   steps=0;
