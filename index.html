@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI歩き方診断</title>
+<title>AI歩き方診断 完全版</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
@@ -26,29 +26,31 @@ body{
   border-radius:15px;
   padding:15px;
   margin:10px auto;
-  max-width:400px;
+  max-width:420px;
 }
-button{
+button,select{
   width:100%;
   padding:12px;
   margin:5px 0;
   border:none;
   border-radius:10px;
-  color:white;
 }
-#startBtn{background:green;}
-#stopBtn{background:red;}
-#weekBtn{background:blue;}
+button{color:white;}
+#startBtn{background:#4CAF50;}
+#stopBtn{background:#f44336;}
+#weekBtn{background:#2196F3;}
+#calBtn{background:#ff9800;}
+#monthBtn{background:#9c27b0;}
 </style>
 </head>
 
 <body>
 
-<h2>🚶 AI歩数アプリ</h2>
+<h2>🚶 AI歩数アプリ（完全版）</h2>
 
 <div class="card">
-<button id="startBtn">開始</button>
-<button id="stopBtn">停止</button>
+<button id="startBtn">計測開始</button>
+<button id="stopBtn">計測停止</button>
 </div>
 
 <div class="card">
@@ -57,7 +59,11 @@ button{
 </div>
 
 <div class="card">
-<button id="weekBtn">週グラフ</button>
+<button id="weekBtn">週歩数</button>
+<button id="calBtn">カロリー</button>
+<select id="monthSelect"></select>
+<button id="monthBtn">月グラフ</button>
+
 <canvas id="chart"></canvas>
 </div>
 
@@ -67,12 +73,28 @@ let data=JSON.parse(localStorage.getItem("steps"))||{};
 const today=new Date().toISOString().slice(0,10);
 if(!data[today]) data[today]=0;
 
+// ===== 月選択 =====
+function initMonth(){
+ const select=document.getElementById("monthSelect");
+ const keys=Object.keys(data);
+ const months=[...new Set(keys.map(k=>k.slice(0,7)))];
+ months.sort().reverse();
+
+ months.forEach(m=>{
+   const o=document.createElement("option");
+   o.value=m;
+   o.textContent=m;
+   select.appendChild(o);
+ });
+}
+
 // ===== グラフ =====
 const chart=new Chart(document.getElementById("chart"),{
  type:"bar",
  data:{labels:[],datasets:[{label:"歩数",data:[]}]}
 });
 
+// ===== 週 =====
 function getWeek(){
  let arr=[];
  for(let i=6;i>=0;i--){
@@ -86,7 +108,35 @@ function getWeek(){
 function showWeek(){
  const w=getWeek();
  chart.data.labels=w.map(d=>d.slice(5));
+ chart.data.datasets[0].label="歩数";
  chart.data.datasets[0].data=w.map(d=>data[d]||0);
+ chart.update();
+}
+
+// ===== カロリー =====
+function showCal(){
+ const w=getWeek();
+ chart.data.labels=w.map(d=>d.slice(5));
+ chart.data.datasets[0].label="カロリー";
+ chart.data.datasets[0].data=w.map(d=>(data[d]||0)*0.04);
+ chart.update();
+}
+
+// ===== 月 =====
+function showMonth(){
+ const m=document.getElementById("monthSelect").value;
+ const days=new Date(m.split("-")[0],m.split("-")[1],0).getDate();
+
+ let labels=[],vals=[];
+ for(let i=1;i<=days;i++){
+   let d=m+"-"+String(i).padStart(2,'0');
+   labels.push(i);
+   vals.push(data[d]||0);
+ }
+
+ chart.data.labels=labels;
+ chart.data.datasets[0].label="月歩数";
+ chart.data.datasets[0].data=vals;
  chart.update();
 }
 
@@ -95,10 +145,7 @@ document.getElementById("startBtn").onclick=async()=>{
  if(typeof DeviceMotionEvent!=='undefined' &&
     typeof DeviceMotionEvent.requestPermission==='function'){
    const p=await DeviceMotionEvent.requestPermission();
-   if(p!=='granted'){
-     alert("許可必要");
-     return;
-   }
+   if(p!=='granted'){alert("許可必要");return;}
  }
  walking=true;
  steps=0;
@@ -143,7 +190,13 @@ function analyze(){
  document.getElementById("analysis").innerText=msg;
 }
 
-// 初期表示
+// ===== ボタン =====
+document.getElementById("weekBtn").onclick=showWeek;
+document.getElementById("calBtn").onclick=showCal;
+document.getElementById("monthBtn").onclick=showMonth;
+
+// 初期化
+initMonth();
 showWeek();
 </script>
 
