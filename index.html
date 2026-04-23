@@ -3,49 +3,74 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI歩き方診断アプリ（AI強化版）</title>
+<title>AI歩き方診断アプリ</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
+/* ===== 背景（フィットネス風） ===== */
 body{
   font-family: Arial;
-  background:#f5f5f5;
   margin:0;
   padding:10px;
   text-align:center;
+
+  background: linear-gradient(-45deg, #4facfe, #00f2fe, #43e97b, #38f9d7);
+  background-size: 400% 400%;
+  animation: gradientMove 10s ease infinite;
+  color:#333;
 }
 
+@keyframes gradientMove{
+  0%{background-position:0% 50%;}
+  50%{background-position:100% 50%;}
+  100%{background-position:0% 50%;}
+}
+
+/* ===== カード ===== */
 .card{
-  background:white;
-  border-radius:16px;
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(10px);
+  border-radius:18px;
   padding:15px;
-  margin:10px auto;
+  margin:12px auto;
   max-width:420px;
-  box-shadow:0 2px 8px rgba(0,0,0,0.1);
+  box-shadow:0 6px 20px rgba(0,0,0,0.15);
 }
 
-.button-group{
-  display:flex;
-  flex-direction:column;
-  gap:10px;
-}
-
+/* ===== ボタン ===== */
 button, select{
   width:100%;
   font-size:16px;
   padding:12px;
   border:none;
-  border-radius:10px;
+  border-radius:12px;
+  margin-top:5px;
 }
 
-button{color:white;}
+button{
+  color:white;
+  font-weight:bold;
+  transition:transform 0.1s, opacity 0.2s;
+}
 
-#startBtn{background:#4CAF50;}
-#stopBtn{background:#f44336;}
-#weekBtn{background:#2196F3;}
-#calorieBtn{background:#ff9800;}
-#monthBtn{background:#9c27b0;}
+button:active{
+  transform:scale(0.97);
+  opacity:0.8;
+}
 
+#startBtn{background:linear-gradient(45deg,#4CAF50,#2ecc71);}
+#stopBtn{background:linear-gradient(45deg,#f44336,#ff6b6b);}
+#weekBtn{background:linear-gradient(45deg,#2196F3,#6ec6ff);}
+#calorieBtn{background:linear-gradient(45deg,#ff9800,#ffc107);}
+#monthBtn{background:linear-gradient(45deg,#9c27b0,#ba68c8);}
+
+/* ===== タイトル ===== */
+h2{
+  color:white;
+  text-shadow:0 2px 8px rgba(0,0,0,0.3);
+}
+
+/* ===== ドーナツ ===== */
 .donut-wrapper{
   position:relative;
   width:220px;
@@ -57,13 +82,15 @@ button{color:white;}
   top:50%;
   left:50%;
   transform:translate(-50%,-50%);
-  font-size:18px;
+  font-size:20px;
   font-weight:bold;
 }
 
+/* ===== グラフ ===== */
 canvas{
   width:100% !important;
   height:250px !important;
+  filter: drop-shadow(0px 4px 10px rgba(0,0,0,0.2));
 }
 
 #remaining,#analysis,#monthInfo{
@@ -76,13 +103,11 @@ canvas{
 
 <body>
 
-<h2>🚶 AI歩き方診断（AI強化版）</h2>
+<h2>🚶 AI歩き方診断</h2>
 
 <div class="card">
-  <div class="button-group">
-    <button id="startBtn">計測開始</button>
-    <button id="stopBtn">計測停止</button>
-  </div>
+  <button id="startBtn">計測開始</button>
+  <button id="stopBtn">計測停止</button>
 </div>
 
 <div class="card">
@@ -96,10 +121,8 @@ canvas{
 </div>
 
 <div class="card">
-  <div class="button-group">
-    <button id="weekBtn">週の歩数</button>
-    <button id="calorieBtn">消費カロリー</button>
-  </div>
+  <button id="weekBtn">週の歩数</button>
+  <button id="calorieBtn">消費カロリー</button>
 
   <select id="monthSelect"></select>
   <button id="monthBtn">📅 月表示</button>
@@ -112,24 +135,18 @@ canvas{
 const DAILY_GOAL = 9000;
 const CAL_PER_STEP = 0.04;
 
-let steps = 0;
-let walking = false;
-let lastStepTime = 0;
-let startTime = 0;
+let steps=0, walking=false, lastStepTime=0, startTime=0;
+let magnitudes=[], stepTimes=[];
 
-let magnitudes = [];
-let stepTimes = [];
+const STEP_THRESHOLD=12;
+const STEP_INTERVAL=300;
 
-const STEP_THRESHOLD = 12;
-const STEP_INTERVAL = 300;
-
-// 日付
+// ===== 日付 =====
 function todayKey(){
   const d=new Date();
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,'0')+"-"+String(d.getDate()).padStart(2,'0');
 }
 
-// 今週
 function getWeek(){
   const t=new Date();
   const day=t.getDay();
@@ -146,26 +163,22 @@ function getWeek(){
   return arr;
 }
 
-// 月
-function getMonthDays(monthStr){
-  const [year, month] = monthStr.split("-");
-  const lastDay = new Date(year, month, 0).getDate();
-
-  let days=[];
-  for(let i=1;i<=lastDay;i++){
-    days.push(
-      year+"-"+String(month).padStart(2,'0')+"-"+String(i).padStart(2,'0')
-    );
+function getMonthDays(m){
+  const [y,mo]=m.split("-");
+  const last=new Date(y,mo,0).getDate();
+  let arr=[];
+  for(let i=1;i<=last;i++){
+    arr.push(y+"-"+String(mo).padStart(2,'0')+"-"+String(i).padStart(2,'0'));
   }
-  return days;
+  return arr;
 }
 
-// データ
+// ===== データ =====
 let data=JSON.parse(localStorage.getItem("steps"))||{};
 const today=todayKey();
 if(!data[today]) data[today]=0;
 
-// 月選択
+// 月選択生成
 function generateMonthOptions(){
   const select=document.getElementById("monthSelect");
   const keys=Object.keys(data);
@@ -173,14 +186,14 @@ function generateMonthOptions(){
   months.sort().reverse();
 
   months.forEach(m=>{
-    const option=document.createElement("option");
-    option.value=m;
-    option.textContent=m.replace("-", "年")+"月";
-    select.appendChild(option);
+    const op=document.createElement("option");
+    op.value=m;
+    op.textContent=m.replace("-","年")+"月";
+    select.appendChild(op);
   });
 }
 
-// ドーナツ
+// ===== ドーナツ =====
 const donut=new Chart(document.getElementById("donutChart"),{
   type:"doughnut",
   data:{datasets:[{data:[0,DAILY_GOAL],backgroundColor:["#4CAF50","#ddd"]}]},
@@ -198,14 +211,13 @@ function updateDonut(){
   document.getElementById("remaining").innerHTML=`あと ${rem} 歩`;
 }
 
-// グラフ
+// ===== グラフ =====
 const main=new Chart(document.getElementById("mainChart"),{
   type:"bar",
   data:{labels:[],datasets:[{data:[]}]},
   options:{scales:{y:{beginAtZero:true}}}
 });
 
-// 週
 function showSteps(){
   const w=getWeek();
   main.data.labels=w.map(d=>d.slice(5));
@@ -215,7 +227,6 @@ function showSteps(){
   document.getElementById("monthInfo").innerHTML="";
 }
 
-// カロリー
 function showCalories(){
   const w=getWeek();
   main.data.labels=w.map(d=>d.slice(5));
@@ -225,47 +236,37 @@ function showCalories(){
   document.getElementById("monthInfo").innerHTML="";
 }
 
-// 月表示
 function showMonth(){
   const m=document.getElementById("monthSelect").value;
   const days=getMonthDays(m);
-  const values=days.map(d=>data[d]||0);
+  const v=days.map(d=>data[d]||0);
 
   main.data.labels=days.map(d=>d.slice(8));
   main.data.datasets[0].label=m+" の歩数";
-  main.data.datasets[0].data=values;
+  main.data.datasets[0].data=v;
   main.update();
 
-  const sum=values.reduce((a,b)=>a+b,0);
-  const avg=Math.round(sum/values.length);
+  const sum=v.reduce((a,b)=>a+b,0);
+  const avg=Math.round(sum/v.length);
 
-  const max=Math.max(...values);
-  const min=Math.min(...values);
+  const max=Math.max(...v);
+  const min=Math.min(...v);
 
-  const maxDay=values.indexOf(max)+1;
-  const minDay=values.indexOf(min)+1;
-
-  document.getElementById("monthInfo").innerHTML=`
-    月平均：${avg}歩<br>
-    最大：${max}歩（${maxDay}日）<br>
-    最小：${min}歩（${minDay}日）
-  `;
+  document.getElementById("monthInfo").innerHTML=
+    `平均:${avg}歩<br>最大:${max}歩<br>最小:${min}歩`;
 }
 
-// ===== AI強化 =====
+// ===== AI =====
 function analyzeAI(){
   const duration=(Date.now()-startTime)/60000;
   const cadence=duration>0?steps/duration:0;
 
-  let tempoScore = cadence<90?50:cadence<=120?100:70;
+  let tempoScore=cadence<90?50:cadence<=120?100:70;
 
-  const avg = magnitudes.length ?
-    magnitudes.reduce((a,b)=>a+b,0)/magnitudes.length : 0;
+  const avg=magnitudes.length?magnitudes.reduce((a,b)=>a+b,0)/magnitudes.length:0;
+  const variance=magnitudes.length?magnitudes.reduce((a,b)=>a+(b-avg)**2,0)/magnitudes.length:0;
 
-  const variance = magnitudes.length ?
-    magnitudes.reduce((a,b)=>a+(b-avg)**2,0)/magnitudes.length : 0;
-
-  let stabilityScore = variance<5?100:variance<15?70:40;
+  let stabilityScore=variance<5?100:variance<15?70:40;
 
   let intervals=[];
   for(let i=1;i<stepTimes.length;i++){
@@ -276,57 +277,33 @@ function analyzeAI(){
   if(intervals.length){
     const avgInt=intervals.reduce((a,b)=>a+b,0)/intervals.length;
     const varInt=intervals.reduce((a,b)=>a+(b-avgInt)**2,0)/intervals.length;
-    rhythmScore = varInt<20000?100:varInt<80000?70:40;
+    rhythmScore=varInt<20000?100:varInt<80000?70:40;
   }
 
-  const total=Math.round(
-    tempoScore*0.4 +
-    stabilityScore*0.4 +
-    rhythmScore*0.2
-  );
-
-  return {total,tempoScore,stabilityScore,rhythmScore,cadence,variance};
-}
-
-function generateAdvice(r){
-  let type="", advice=[], comment="";
-
-  if(r.total>=85) type="🏃 アクティブ型";
-  else if(r.total>=70) type="🚶 バランス型";
-  else if(r.total>=50) type="🐢 ゆっくり型";
-  else type="⚠️ 不安定型";
-
-  if(r.cadence<90) advice.push("テンポを少し上げると効果UP");
-  if(r.cadence>120) advice.push("少しペースを落とすと安定");
-
-  if(r.variance>15) advice.push("姿勢を意識すると安定します");
-  if(r.variance<5) advice.push("非常に安定した歩き方です");
-
-  if(r.total>=80) comment="とても良い歩行です！";
-  else if(r.total>=60) comment="良いですが改善の余地あり";
-  else comment="改善で大きく伸びます！";
-
-  return {type, advice, comment};
+  const total=Math.round(tempoScore*0.4+stabilityScore*0.4+rhythmScore*0.2);
+  return {total,cadence,variance};
 }
 
 function showAI(){
   const r=analyzeAI();
-  const ai=generateAdvice(r);
 
-  document.getElementById("analysis").innerHTML=`
-    🔥 AIスコア：${r.total}点<br><br>
-    🧬 タイプ：${ai.type}<br><br>
-    💬 評価：${ai.comment}<br><br>
-    🛠 改善：<br>${ai.advice.map(a=>"・"+a).join("<br>")}
-  `;
+  let type=r.total>=85?"🏃 アクティブ型":
+           r.total>=70?"🚶 バランス型":
+           r.total>=50?"🐢 ゆっくり型":"⚠️ 不安定型";
+
+  let advice=[];
+  if(r.cadence<90) advice.push("テンポを上げよう");
+  if(r.variance>15) advice.push("姿勢を意識");
+
+  document.getElementById("analysis").innerHTML=
+    `🔥 ${r.total}点<br>タイプ:${type}<br>${advice.join("<br>")}`;
 }
 
-// ボタン
+// ===== 操作 =====
 document.getElementById("weekBtn").onclick=showSteps;
 document.getElementById("calorieBtn").onclick=showCalories;
 document.getElementById("monthBtn").onclick=showMonth;
 
-// 計測
 document.getElementById("startBtn").onclick=async()=>{
   walking=true;
   steps=0;
