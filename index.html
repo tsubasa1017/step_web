@@ -7,20 +7,22 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
-/* ===== 背景（フィットネス風） ===== */
+
+/* ===== 背景（ここが最重要） ===== */
 body{
-  font-family: Arial;
   margin:0;
   padding:10px;
   text-align:center;
+  font-family: Arial;
 
   background: linear-gradient(-45deg, #4facfe, #00f2fe, #43e97b, #38f9d7);
   background-size: 400% 400%;
-  animation: gradientMove 10s ease infinite;
+  animation: bgMove 10s ease infinite;
+
   color:#333;
 }
 
-@keyframes gradientMove{
+@keyframes bgMove{
   0%{background-position:0% 50%;}
   50%{background-position:100% 50%;}
   100%{background-position:0% 50%;}
@@ -28,13 +30,12 @@ body{
 
 /* ===== カード ===== */
 .card{
-  background: rgba(255,255,255,0.85);
-  backdrop-filter: blur(10px);
+  background: rgba(255,255,255,0.9);
   border-radius:18px;
   padding:15px;
   margin:12px auto;
   max-width:420px;
-  box-shadow:0 6px 20px rgba(0,0,0,0.15);
+  box-shadow:0 6px 20px rgba(0,0,0,0.2);
 }
 
 /* ===== ボタン ===== */
@@ -44,31 +45,19 @@ button, select{
   padding:12px;
   border:none;
   border-radius:12px;
-  margin-top:5px;
+  margin-top:6px;
 }
 
 button{
   color:white;
   font-weight:bold;
-  transition:transform 0.1s, opacity 0.2s;
 }
 
-button:active{
-  transform:scale(0.97);
-  opacity:0.8;
-}
-
-#startBtn{background:linear-gradient(45deg,#4CAF50,#2ecc71);}
-#stopBtn{background:linear-gradient(45deg,#f44336,#ff6b6b);}
-#weekBtn{background:linear-gradient(45deg,#2196F3,#6ec6ff);}
-#calorieBtn{background:linear-gradient(45deg,#ff9800,#ffc107);}
-#monthBtn{background:linear-gradient(45deg,#9c27b0,#ba68c8);}
-
-/* ===== タイトル ===== */
-h2{
-  color:white;
-  text-shadow:0 2px 8px rgba(0,0,0,0.3);
-}
+#startBtn{background:#4CAF50;}
+#stopBtn{background:#f44336;}
+#weekBtn{background:#2196F3;}
+#calorieBtn{background:#ff9800;}
+#monthBtn{background:#9c27b0;}
 
 /* ===== ドーナツ ===== */
 .donut-wrapper{
@@ -90,7 +79,6 @@ h2{
 canvas{
   width:100% !important;
   height:250px !important;
-  filter: drop-shadow(0px 4px 10px rgba(0,0,0,0.2));
 }
 
 #remaining,#analysis,#monthInfo{
@@ -98,12 +86,13 @@ canvas{
   font-size:16px;
   text-align:left;
 }
+
 </style>
 </head>
 
 <body>
 
-<h2>🚶 AI歩き方診断</h2>
+<h2 style="color:white;">🚶 AI歩き方診断</h2>
 
 <div class="card">
   <button id="startBtn">計測開始</button>
@@ -178,7 +167,7 @@ let data=JSON.parse(localStorage.getItem("steps"))||{};
 const today=todayKey();
 if(!data[today]) data[today]=0;
 
-// 月選択生成
+// 月選択
 function generateMonthOptions(){
   const select=document.getElementById("monthSelect");
   const keys=Object.keys(data);
@@ -224,7 +213,6 @@ function showSteps(){
   main.data.datasets[0].label="歩数";
   main.data.datasets[0].data=w.map(d=>data[d]||0);
   main.update();
-  document.getElementById("monthInfo").innerHTML="";
 }
 
 function showCalories(){
@@ -233,7 +221,6 @@ function showCalories(){
   main.data.datasets[0].label="カロリー";
   main.data.datasets[0].data=w.map(d=>(data[d]||0)*CAL_PER_STEP);
   main.update();
-  document.getElementById("monthInfo").innerHTML="";
 }
 
 function showMonth(){
@@ -245,58 +232,6 @@ function showMonth(){
   main.data.datasets[0].label=m+" の歩数";
   main.data.datasets[0].data=v;
   main.update();
-
-  const sum=v.reduce((a,b)=>a+b,0);
-  const avg=Math.round(sum/v.length);
-
-  const max=Math.max(...v);
-  const min=Math.min(...v);
-
-  document.getElementById("monthInfo").innerHTML=
-    `平均:${avg}歩<br>最大:${max}歩<br>最小:${min}歩`;
-}
-
-// ===== AI =====
-function analyzeAI(){
-  const duration=(Date.now()-startTime)/60000;
-  const cadence=duration>0?steps/duration:0;
-
-  let tempoScore=cadence<90?50:cadence<=120?100:70;
-
-  const avg=magnitudes.length?magnitudes.reduce((a,b)=>a+b,0)/magnitudes.length:0;
-  const variance=magnitudes.length?magnitudes.reduce((a,b)=>a+(b-avg)**2,0)/magnitudes.length:0;
-
-  let stabilityScore=variance<5?100:variance<15?70:40;
-
-  let intervals=[];
-  for(let i=1;i<stepTimes.length;i++){
-    intervals.push(stepTimes[i]-stepTimes[i-1]);
-  }
-
-  let rhythmScore=50;
-  if(intervals.length){
-    const avgInt=intervals.reduce((a,b)=>a+b,0)/intervals.length;
-    const varInt=intervals.reduce((a,b)=>a+(b-avgInt)**2,0)/intervals.length;
-    rhythmScore=varInt<20000?100:varInt<80000?70:40;
-  }
-
-  const total=Math.round(tempoScore*0.4+stabilityScore*0.4+rhythmScore*0.2);
-  return {total,cadence,variance};
-}
-
-function showAI(){
-  const r=analyzeAI();
-
-  let type=r.total>=85?"🏃 アクティブ型":
-           r.total>=70?"🚶 バランス型":
-           r.total>=50?"🐢 ゆっくり型":"⚠️ 不安定型";
-
-  let advice=[];
-  if(r.cadence<90) advice.push("テンポを上げよう");
-  if(r.variance>15) advice.push("姿勢を意識");
-
-  document.getElementById("analysis").innerHTML=
-    `🔥 ${r.total}点<br>タイプ:${type}<br>${advice.join("<br>")}`;
 }
 
 // ===== 操作 =====
@@ -304,17 +239,10 @@ document.getElementById("weekBtn").onclick=showSteps;
 document.getElementById("calorieBtn").onclick=showCalories;
 document.getElementById("monthBtn").onclick=showMonth;
 
-document.getElementById("startBtn").onclick=async()=>{
+document.getElementById("startBtn").onclick=()=>{
   walking=true;
   steps=0;
-  magnitudes=[];
-  stepTimes=[];
   startTime=Date.now();
-
-  if(typeof DeviceMotionEvent!=='undefined' &&
-     typeof DeviceMotionEvent.requestPermission==='function'){
-    await DeviceMotionEvent.requestPermission();
-  }
 };
 
 document.getElementById("stopBtn").onclick=()=>{
@@ -323,7 +251,6 @@ document.getElementById("stopBtn").onclick=()=>{
   localStorage.setItem("steps",JSON.stringify(data));
   updateDonut();
   showSteps();
-  showAI();
 };
 
 // センサー
@@ -333,12 +260,10 @@ window.addEventListener("devicemotion",(e)=>{
   if(!a)return;
 
   const mag=Math.sqrt(a.x*a.x+a.y*a.y+a.z*a.z);
-  magnitudes.push(mag);
 
   const now=Date.now();
   if(mag>STEP_THRESHOLD && now-lastStepTime>STEP_INTERVAL){
     steps++;
-    stepTimes.push(now);
     lastStepTime=now;
   }
 });
