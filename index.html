@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI歩き方診断アプリ</title>
+<title>AI歩き方診断</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
@@ -12,160 +12,139 @@ body{
   padding:10px;
   text-align:center;
   font-family: Arial;
-
-  background: linear-gradient(-45deg, #4facfe, #00f2fe, #43e97b, #38f9d7);
-  background-size: 400% 400%;
-  animation: bgMove 10s ease infinite;
-  color:#333;
+  background: linear-gradient(-45deg,#4facfe,#00f2fe,#43e97b,#38f9d7);
+  background-size:400% 400%;
+  animation:bg 10s ease infinite;
 }
-
-@keyframes bgMove{
-  0%{background-position:0% 50%;}
-  50%{background-position:100% 50%;}
-  100%{background-position:0% 50%;}
+@keyframes bg{
+  0%{background-position:0%}
+  50%{background-position:100%}
+  100%{background-position:0%}
 }
-
 .card{
-  background: rgba(255,255,255,0.9);
-  border-radius:18px;
+  background:white;
+  border-radius:15px;
   padding:15px;
-  margin:12px auto;
-  max-width:420px;
-  box-shadow:0 6px 20px rgba(0,0,0,0.2);
+  margin:10px auto;
+  max-width:400px;
 }
-
 button{
   width:100%;
-  font-size:16px;
   padding:12px;
+  margin:5px 0;
   border:none;
-  border-radius:12px;
-  margin-top:6px;
+  border-radius:10px;
   color:white;
-  font-weight:bold;
 }
-
-#startBtn{background:#4CAF50;}
-#stopBtn{background:#f44336;}
-
-.donut-wrapper{
-  position:relative;
-  width:220px;
-  margin:0 auto;
-}
-
-.center-text{
-  position:absolute;
-  top:50%;
-  left:50%;
-  transform:translate(-50%,-50%);
-  font-size:20px;
-  font-weight:bold;
-}
-
-canvas{
-  width:100% !important;
-  height:250px !important;
-}
-
-#result{
-  margin-top:10px;
-  font-size:18px;
-}
+#startBtn{background:green;}
+#stopBtn{background:red;}
+#weekBtn{background:blue;}
 </style>
 </head>
 
 <body>
 
-<h2 style="color:white;">🚶 歩数計</h2>
+<h2>🚶 AI歩数アプリ</h2>
 
 <div class="card">
-  <button id="startBtn">計測開始</button>
-  <button id="stopBtn">計測停止</button>
+<button id="startBtn">開始</button>
+<button id="stopBtn">停止</button>
 </div>
 
 <div class="card">
-  <div class="donut-wrapper">
-    <canvas id="donutChart"></canvas>
-    <div class="center-text" id="centerText">0歩</div>
-  </div>
-  <div id="result">歩数：0</div>
+<p id="result">歩数：0</p>
+<p id="analysis"></p>
+</div>
+
+<div class="card">
+<button id="weekBtn">週グラフ</button>
+<canvas id="chart"></canvas>
 </div>
 
 <script>
-let steps = 0;
-let walking = false;
-let lastStepTime = 0;
+let steps=0, walking=false, lastStep=0, startTime=0;
+let data=JSON.parse(localStorage.getItem("steps"))||{};
+const today=new Date().toISOString().slice(0,10);
+if(!data[today]) data[today]=0;
 
-const STEP_THRESHOLD = 12;
-const STEP_INTERVAL = 300;
-
-// ===== ドーナツ =====
-const donut = new Chart(document.getElementById("donutChart"), {
-  type: "doughnut",
-  data: {
-    datasets: [{
-      data: [0, 9000],
-      backgroundColor: ["#4CAF50", "#ddd"]
-    }]
-  },
-  options: {
-    cutout: "70%",
-    plugins: { legend: { display: false } }
-  }
+// ===== グラフ =====
+const chart=new Chart(document.getElementById("chart"),{
+ type:"bar",
+ data:{labels:[],datasets:[{label:"歩数",data:[]}]}
 });
 
-function updateUI(){
-  document.getElementById("centerText").innerText = steps + "歩";
-  document.getElementById("result").innerText = "歩数：" + steps;
-
-  donut.data.datasets[0].data = [steps, Math.max(9000 - steps, 0)];
-  donut.update();
+function getWeek(){
+ let arr=[];
+ for(let i=6;i>=0;i--){
+   let d=new Date();
+   d.setDate(d.getDate()-i);
+   arr.push(d.toISOString().slice(0,10));
+ }
+ return arr;
 }
 
-// ===== 計測開始（iPhone対応） =====
-document.getElementById("startBtn").onclick = async () => {
+function showWeek(){
+ const w=getWeek();
+ chart.data.labels=w.map(d=>d.slice(5));
+ chart.data.datasets[0].data=w.map(d=>data[d]||0);
+ chart.update();
+}
 
-  // iPhone用 許可
-  if (typeof DeviceMotionEvent !== 'undefined' &&
-      typeof DeviceMotionEvent.requestPermission === 'function') {
-
-    const permission = await DeviceMotionEvent.requestPermission();
-
-    if (permission !== 'granted') {
-      alert("センサーの許可が必要です");
-      return;
-    }
-  }
-
-  walking = true;
-  steps = 0;
-
-  alert("計測スタート！");
+// ===== iPhone対応開始 =====
+document.getElementById("startBtn").onclick=async()=>{
+ if(typeof DeviceMotionEvent!=='undefined' &&
+    typeof DeviceMotionEvent.requestPermission==='function'){
+   const p=await DeviceMotionEvent.requestPermission();
+   if(p!=='granted'){
+     alert("許可必要");
+     return;
+   }
+ }
+ walking=true;
+ steps=0;
+ startTime=Date.now();
 };
 
 // ===== 停止 =====
-document.getElementById("stopBtn").onclick = () => {
-  walking = false;
-  alert("停止しました");
+document.getElementById("stopBtn").onclick=()=>{
+ walking=false;
+ data[today]+=steps;
+ localStorage.setItem("steps",JSON.stringify(data));
+ showWeek();
+ analyze();
 };
 
 // ===== センサー =====
-window.addEventListener("devicemotion", (event) => {
-  if (!walking) return;
+window.addEventListener("devicemotion",(e)=>{
+ if(!walking)return;
+ const a=e.accelerationIncludingGravity;
+ if(!a)return;
 
-  const acc = event.accelerationIncludingGravity;
-  if (!acc) return;
+ const mag=Math.sqrt(a.x*a.x+a.y*a.y+a.z*a.z);
+ const now=Date.now();
 
-  const magnitude = Math.sqrt(acc.x*acc.x + acc.y*acc.y + acc.z*acc.z);
-  const now = Date.now();
-
-  if (magnitude > STEP_THRESHOLD && now - lastStepTime > STEP_INTERVAL) {
-    steps++;
-    lastStepTime = now;
-    updateUI();
-  }
+ if(mag>12 && now-lastStep>300){
+   steps++;
+   lastStep=now;
+   document.getElementById("result").innerText="歩数："+steps;
+ }
 });
+
+// ===== AI =====
+function analyze(){
+ const time=(Date.now()-startTime)/60000;
+ const cadence=steps/time;
+
+ let msg="";
+ if(cadence>120) msg="速い！";
+ else if(cadence>90) msg="良いペース";
+ else msg="ゆっくり";
+
+ document.getElementById("analysis").innerText=msg;
+}
+
+// 初期表示
+showWeek();
 </script>
 
 </body>
