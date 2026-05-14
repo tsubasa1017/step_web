@@ -147,7 +147,8 @@ function updateDonut(){
 function updateTodayCal(){
  const weight=parseFloat(localStorage.getItem("weight"))||60;
  const total=data[today]+steps;
- const cal=Math.round(total*weight*0.0005);
+ const stepCount = data[d] || 0;
+ return Math.round(stepCount * weight * 0.0005);
 
  document.getElementById("todayCal").innerText="消費カロリー: "+cal+" kcal";
 }
@@ -195,6 +196,7 @@ function getWeek(){
 function showWeek(){
  const w=getWeek();
  chart.data.labels=w.map(d=>d.slice(5));
+ chart.data.datasets[0].label="歩数";
  chart.data.datasets[0].data=w.map(d=>data[d]||0);
  chart.update();
 }
@@ -211,6 +213,7 @@ function showCal(){
 
 function showMonth(){
  const m=document.getElementById("monthSelect").value;
+ if(!m) return;
  const days=new Date(m.split("-")[0],m.split("-")[1],0).getDate();
 
  let labels=[],vals=[];
@@ -221,6 +224,7 @@ function showMonth(){
  }
 
  chart.data.labels=labels;
+ chart.data.datasets[0].label="月歩数";
  chart.data.datasets[0].data=vals;
  chart.update();
 }
